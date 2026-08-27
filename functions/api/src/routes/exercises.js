@@ -21,7 +21,7 @@ async function fetchVisibleExercises(catalystApp, userId) {
   while (more) {
     const { data, next_token, more_records } = await table.getPagedRows({
       nextToken,
-      maxRows: 1000
+      maxRows: 300
     });
     rows.push(...data);
     more = more_records;
