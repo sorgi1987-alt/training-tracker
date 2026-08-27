@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#111318" />
+    <title>Training Tracker</title>
+    <!--
+      Catalyst Embedded Authentication SDK. init.js is served by Catalyst
+      itself (only resolves when running under `catalyst serve` or once
+      deployed — a bare `vite dev` server will 404 on it, which is expected).
+      See feedback-catalyst-auth-caution memory: auth must only be tested
+      through Catalyst's own serving to avoid the prior redirect-loop issue.
+    -->
+    <script src="https://static.zohocdn.com/catalyst/sdk/js/4.4.0/catalystWebSDK.js"></script>
+    <script src="/__catalyst/sdk/init.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

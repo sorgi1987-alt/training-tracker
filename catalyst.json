@@ -1,0 +1,12 @@
+{
+  "client": {
+    "source": "client/dist"
+  },
+  "functions": {
+    "targets": [
+      "api"
+    ],
+    "ignore": [],
+    "source": "functions"
+  }
+}
