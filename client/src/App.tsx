@@ -4,6 +4,9 @@ import { AppShell } from './layouts/AppShell';
 import { Login } from './pages/Login';
 import { Home } from './pages/Home';
 import { Placeholder } from './pages/Placeholder';
+import { Exercises } from './pages/Exercises';
+import { ExerciseDetail } from './pages/ExerciseDetail';
+import { NewExercise } from './pages/NewExercise';
 
 export function App() {
   return (
@@ -20,10 +23,9 @@ export function App() {
             path="/history"
             element={<Placeholder title="History" note="Session history arrives in Phase 5." />}
           />
-          <Route
-            path="/exercises"
-            element={<Placeholder title="Exercises" note="The exercise library arrives in Phase 2." />}
-          />
+          <Route path="/exercises" element={<Exercises />} />
+          <Route path="/exercises/new" element={<NewExercise />} />
+          <Route path="/exercises/:id" element={<ExerciseDetail />} />
           <Route
             path="/more"
             element={<Placeholder title="More" note="Settings, body weight and import/export land in later phases." />}

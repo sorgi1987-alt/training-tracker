@@ -2,6 +2,7 @@
 
 const express = require('express');
 const healthRouter = require('./routes/health');
+const exercisesRouter = require('./routes/exercises');
 const { notImplementedRouter } = require('./routes/notImplemented');
 
 const app = express();
@@ -9,7 +10,7 @@ app.use(express.json());
 
 app.use(healthRouter);
 app.use('/plans', notImplementedRouter('plans'));
-app.use('/exercises', notImplementedRouter('exercises'));
+app.use('/exercises', exercisesRouter);
 app.use('/sessions', notImplementedRouter('sessions'));
 app.use('/measurements', notImplementedRouter('measurements'));
 

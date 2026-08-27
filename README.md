@@ -7,13 +7,14 @@ Full product spec: [`zoho_catalyst_training_tracker_claude_prompt.md`](./zoho_ca
 
 ## Status
 
-**Phase 1 — Foundation** is in progress. Frontend shell, auth wiring, backend
-API skeleton, and the first four Data Store tables exist. Authentication is
-not yet enabled on the Catalyst project (see "Enabling Authentication"
-below) — until it is, the app always shows the sign-in screen.
+**Phase 1 — Foundation** and **Phase 2 — Exercise Library** are complete and
+deployed. Embedded email/password authentication is live and verified
+end-to-end. Public self-signup is off (console-only toggle, not flipped by
+choice yet) — new users are added via Catalyst's Add User (invite email) for
+now.
 
-Later phases (exercise library, plan CRUD, workout logging, history, JSON
-import/export, rest timer, offline sync) are designed but not built yet.
+Later phases (plan CRUD, workout logging, history, JSON import/export, rest
+timer, offline sync) are designed but not built yet.
 
 ## Architecture
 
@@ -85,33 +86,52 @@ is set to `node24` to match this machine; adjust if your Node version differs.
 automatically. The client is served from its built `dist/` output, so rerun
 `npm run build` after client changes (no live-reload yet).
 
-## Enabling Authentication
+## Authentication
 
-Not done yet — this is a deliberate checkpoint, not an oversight. Before
-enabling embedded email/password authentication in the Catalyst console for
-this project, double-check the registered sign-in redirect domain exactly
-matches the project's real domain
+Embedded email/password auth is enabled on the Catalyst project. Public
+self-signup is currently **off** — only users added via Catalyst's Add User
+(sends an invite email) can sign in. Flip it on in the console under
+Authentication → Embedded Authentication → Public Sign-Up when ready for
+arbitrary users to self-register. Before making further auth changes,
+double-check the registered sign-in redirect domain exactly matches the
+project's real domain
 (`https://training-tracker-20117369913.development.catalystserverless.eu`,
-no trailing slash), and test through `catalyst serve` — never a bare `vite dev`
-server — per the auth note above.
+no trailing slash), and test through `catalyst serve` — never a bare
+`vite dev` server — per the auth note above.
 
-## Data Store (Phase 1 subset)
+## Data Store
 
-Four tables exist so far, enough to prove the auth → API → Data Store path
-end-to-end: `TrainingPlan`, `Exercise`, `WorkoutSession`, `UserPreferences`.
-Relations between tables are stored as plain ROWID-reference columns (e.g.
-`WorkoutSession.plan_id`), not native Catalyst foreign-key columns, and are
-enforced at the `functions/api` layer rather than by the database — this
-keeps delete/soft-delete behavior (plans must never destroy historical
-sessions) predictable and explicit. The full table set (`PlanWorkout`,
-`PlanExercise`, `PlanSet`, `ExerciseAlias`, `SessionExercise`, `SessionSet`,
-`BodyMeasurement`) is added in later phases as their features are built.
+Tables so far: `TrainingPlan`, `Exercise`, `ExerciseAlias`, `WorkoutSession`,
+`UserPreferences`. Relations between tables are stored as plain
+ROWID-reference columns (e.g. `WorkoutSession.plan_id`, `ExerciseAlias.exercise_id`),
+not native Catalyst foreign-key columns, and are enforced at the
+`functions/api` layer rather than by the database — this keeps delete/soft-delete
+behavior (plans must never destroy historical sessions) predictable and
+explicit. The remaining tables (`PlanWorkout`, `PlanExercise`, `PlanSet`,
+`SessionExercise`, `SessionSet`, `BodyMeasurement`) are added in later phases
+as their features are built.
 
-## Known limitations (Phase 1)
+### Exercise library
 
-- No actual product features yet (plans, workouts, history) — the frontend
-  is a shell that proves the foundation works, per the phased build plan in
-  the product spec.
+`Exercise` rows are either system-owned (`owner_user_id` null, visible to
+everyone) or user-owned (`owner_user_id` set, visible only to that user) —
+never both. A curated seed of 99 common strength exercises across all major
+muscle groups and equipment types lives in
+[`functions/api/seed/exercises.json`](./functions/api/seed/exercises.json)
+and has been loaded into the Development environment; `ExerciseAlias` rows
+support alternate names for later JSON-import matching (Phase 6). Custom
+exercises are created via `POST /exercises`, checked against a normalized
+name for obvious duplicates (name is lowercased, punctuation stripped, and
+compared against everything the caller can already see), and can only be
+edited/soft-deleted (`is_active = false`) by the user who owns them — never
+system exercises, never another user's.
+
+## Known limitations
+
+- Plans, workout logging, and history are not built yet (Phases 3-5).
+- The exercise search endpoint fetches all visible rows and filters in
+  memory rather than querying — fine at the curated library's current scale
+  (~100 rows) but would need revisiting if the library grows much larger.
 - The PWA service worker registration hasn't been verified in a real mobile
   browser yet (only checked in an automated browser pane, which may restrict
   Service Worker APIs regardless of app correctness).

@@ -5,9 +5,11 @@ const BASE_PATH = '/server/api';
 
 export class ApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  body: unknown;
+  constructor(message: string, status: number, body?: unknown) {
     super(message);
     this.status = status;
+    this.body = body;
   }
 }
 
@@ -20,7 +22,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new ApiError(body.error ?? `Request failed with status ${res.status}`, res.status);
+    throw new ApiError(body.error ?? `Request failed with status ${res.status}`, res.status, body);
   }
 
   return res.json() as Promise<T>;
