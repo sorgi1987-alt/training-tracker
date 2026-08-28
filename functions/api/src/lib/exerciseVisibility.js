@@ -11,4 +11,27 @@ function isActiveRow(row) {
   return row.is_active === true || row.is_active === 'true';
 }
 
-module.exports = { isExerciseVisible, isActiveRow };
+// The system exercise library is a curated ~100-200 rows (spec section 48),
+// so fetching everything visible to this caller and filtering in memory is
+// simpler and safer than building raw ZCQL search queries, with no
+// meaningful performance cost at this scale.
+async function fetchVisibleExercises(catalystApp, userId) {
+  const table = catalystApp.datastore().table('Exercise');
+  const rows = [];
+  let nextToken;
+  let more = true;
+
+  while (more) {
+    const { data, next_token, more_records } = await table.getPagedRows({
+      nextToken,
+      maxRows: 300
+    });
+    rows.push(...data);
+    more = more_records;
+    nextToken = next_token;
+  }
+
+  return rows.filter((row) => isActiveRow(row) && isExerciseVisible(row, userId));
+}
+
+module.exports = { isExerciseVisible, isActiveRow, fetchVisibleExercises };

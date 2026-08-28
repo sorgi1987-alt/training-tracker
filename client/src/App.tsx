@@ -9,6 +9,7 @@ import { NewExercise } from './pages/NewExercise';
 import { Plans } from './pages/Plans';
 import { NewPlan } from './pages/NewPlan';
 import { PlanDetail } from './pages/PlanDetail';
+import { ImportPlan } from './pages/ImportPlan';
 import { WorkoutDetail } from './pages/WorkoutDetail';
 import { Workout } from './pages/Workout';
 import { History } from './pages/History';
@@ -30,6 +31,7 @@ export function App() {
           <Route path="/exercises/:id" element={<ExerciseDetail />} />
           <Route path="/plans" element={<Plans />} />
           <Route path="/plans/new" element={<NewPlan />} />
+          <Route path="/plans/import" element={<ImportPlan />} />
           <Route path="/plans/:id" element={<PlanDetail />} />
           <Route path="/plans/:planId/workouts/:workoutId" element={<WorkoutDetail />} />
           <Route path="/more" element={<More />} />

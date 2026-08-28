@@ -13,9 +13,14 @@ export function Plans() {
     <div className="page">
       <h1 className="page-title">Training plans</h1>
 
-      <Link to="/plans/new" className="button-secondary exercises-add-link">
-        + New plan
-      </Link>
+      <div className="action-row">
+        <Link to="/plans/new" className="button-secondary">
+          + New plan
+        </Link>
+        <Link to="/plans/import" className="button-secondary">
+          Import from JSON
+        </Link>
+      </div>
 
       {isLoading && <p className="page-subtitle">Loading…</p>}
       {isError && <p className="page-subtitle">Could not load plans.</p>}

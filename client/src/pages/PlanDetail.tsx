@@ -43,6 +43,12 @@ export function PlanDetail() {
     }
   });
 
+  const [exportJson, setExportJson] = useState<string | null>(null);
+  const exportAction = useMutation({
+    mutationFn: () => apiFetch<Record<string, unknown>>(`/plans/${id}/export`),
+    onSuccess: (json) => setExportJson(JSON.stringify(json, null, 2))
+  });
+
   const addWorkout = useMutation({
     mutationFn: (name: string) =>
       apiFetch(`/plans/${id}/workouts`, { method: 'POST', body: JSON.stringify({ name }) }),
@@ -108,7 +114,28 @@ export function PlanDetail() {
         <button className="button-secondary" onClick={() => duplicateAction.mutate()}>
           Duplicate
         </button>
+        <button className="button-secondary" onClick={() => exportAction.mutate()} disabled={exportAction.isPending}>
+          Export JSON
+        </button>
       </div>
+
+      {exportJson && (
+        <section className="card">
+          <h2 className="card-title">Exported JSON</h2>
+          <textarea className="text-input json-textarea" rows={10} readOnly value={exportJson} onFocus={(e) => e.target.select()} />
+          <div className="action-row">
+            <button
+              className="button-secondary"
+              onClick={() => navigator.clipboard.writeText(exportJson)}
+            >
+              Copy to clipboard
+            </button>
+            <button className="button-secondary" onClick={() => setExportJson(null)}>
+              Close
+            </button>
+          </div>
+        </section>
+      )}
 
       <section className="card">
         <h2 className="card-title">Workouts</h2>

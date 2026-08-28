@@ -7,14 +7,14 @@ Full product spec: [`zoho_catalyst_training_tracker_claude_prompt.md`](./zoho_ca
 
 ## Status
 
-**Phase 1 — Foundation** through **Phase 5 — History** are complete and
-deployed. Embedded email/password authentication is live and verified
-end-to-end. Public self-signup is off (console-only toggle, not flipped by
-choice yet) — new users are added via Catalyst's Add User (invite email)
-for now.
+**Phase 1 — Foundation** through **Phase 6 — JSON Import/Export** are
+complete and deployed. Embedded email/password authentication is live and
+verified end-to-end. Public self-signup is off (console-only toggle, not
+flipped by choice yet) — new users are added via Catalyst's Add User
+(invite email) for now.
 
-Later phases (JSON import/export, rest timer, offline sync) are designed
-but not built yet.
+**Phase 7 — Quality of Life** (rest timer, progression suggestions, offline
+resilience, PWA polish) is designed but not built yet.
 
 ## Architecture
 
@@ -189,6 +189,29 @@ set, best estimated one-rep max (Epley formula, documented in the response),
 and highest single-session volume — computed across the exercise's full
 session history, not just the 10 most recent performances shown in the
 history list itself.
+
+### JSON import/export
+
+Always `Paste JSON → Validate → Match Exercises → Preview → Save` (spec
+section 23) — nothing is written to the Data Store until the final
+`POST /plans/import` call, and that call re-validates and re-matches
+everything server-side rather than trusting whatever the client resolved
+(section 3/42's "never trust the client" rule applies here too, not just to
+identity). `POST /plans/import/validate` is a pure read: it runs
+`functions/api/src/lib/planImportSchema.js`'s structural checks (schema
+version, required names, valid set types, sane rep ranges) and
+`functions/api/src/lib/exerciseMatching.js`'s three-tier matching (exact
+name → alias → normalized name, the same normalization used for the
+exercise-library's own duplicate check) against everything the user can see,
+and reports both without writing anything. The frontend (`ImportPlan.tsx`)
+blocks the Import button until every exercise is resolved to either an
+existing `exerciseId` or an explicit `createExerciseName`.
+
+`GET /plans/:id/export` reverses this into the same schema-1.0 shape with no
+Catalyst IDs — safe to hand to an AI assistant or paste into another
+instance of this app. Both the pasted-JSON textarea and the exported-JSON
+display use a dedicated `.json-textarea` monospace style, kept separate from
+the regular notes textareas.
 
 ### Exercise library
 

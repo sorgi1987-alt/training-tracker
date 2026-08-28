@@ -4,6 +4,8 @@ const { Router } = require('express');
 const { requireUser } = require('../middleware/requireUser');
 const { isExerciseVisible } = require('../lib/exerciseVisibility');
 const { assertRowId, zcqlSelect, compact, numOrNull, fetchWhere, toIsoOrNull } = require('../lib/db');
+const { validatePlanImport, VALID_SET_TYPES } = require('../lib/planImportSchema');
+const { buildExerciseMatchIndex, matchExerciseName } = require('../lib/exerciseMatching');
 
 const router = Router();
 router.use(requireUser);
@@ -227,9 +229,266 @@ router.post('/', async (req, res, next) => {
   }
 });
 
+// ---- JSON import/export (spec sections 23-26) --------------------------
+// Workflow is always Paste JSON -> Validate -> Match Exercises -> Preview
+// -> Save (never save on paste). This endpoint is the "Validate + Match"
+// step: it never writes anything, just reports errors and proposed
+// exercise matches for the user to confirm or override.
+router.post('/import/validate', async (req, res, next) => {
+  try {
+    const doc = req.body;
+    const { errors } = validatePlanImport(doc);
+    const matchIndex = await buildExerciseMatchIndex(req.catalystApp, req.currentUser.userId);
+    const workouts = Array.isArray(doc?.workouts) ? doc.workouts : [];
+
+    const workoutPreviews = workouts.map((workout) => ({
+      name: typeof workout?.name === 'string' ? workout.name : '',
+      description: workout?.description ?? null,
+      notes: workout?.notes ?? null,
+      estimatedDurationMinutes: workout?.estimatedDurationMinutes ?? null,
+      exercises: Array.isArray(workout?.exercises)
+        ? workout.exercises.map((exercise) => {
+            const importName = typeof exercise?.exercise === 'string' ? exercise.exercise : '';
+            const { exercise: matched, matchType } = matchExerciseName(matchIndex, importName);
+            return {
+              importName,
+              restSeconds: exercise?.restSeconds ?? null,
+              notes: exercise?.notes ?? null,
+              match: matched ? { exerciseId: matched.ROWID, name: matched.name, matchType } : null,
+              sets: Array.isArray(exercise?.sets) ? exercise.sets : []
+            };
+          })
+        : []
+    }));
+
+    res.json({
+      errors,
+      plan: {
+        name: typeof doc?.name === 'string' ? doc.name : '',
+        description: doc?.description ?? null,
+        durationWeeks: typeof doc?.durationWeeks === 'number' ? doc.durationWeeks : null,
+        startDate: doc?.startDate ?? null
+      },
+      workouts: workoutPreviews
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// The "Save" step: takes the same shape as /import/validate's response,
+// with every exercise resolved to either an existing exerciseId or a
+// createExerciseName the user chose to add as a new custom exercise. Every
+// reference is re-validated server-side — a client-side resolution is never
+// trusted outright (spec section 3/42).
+router.post('/import', async (req, res, next) => {
+  try {
+    const { catalystApp, currentUser } = req;
+    const doc = req.body;
+
+    const name = typeof doc?.name === 'string' ? doc.name.trim() : '';
+    const durationWeeks = Number(doc?.durationWeeks);
+    if (!name) return res.status(400).json({ error: 'name is required' });
+    if (!Number.isFinite(durationWeeks) || durationWeeks <= 0) {
+      return res.status(400).json({ error: 'durationWeeks must be a positive number' });
+    }
+
+    const workouts = Array.isArray(doc?.workouts) ? doc.workouts : [];
+    for (const workout of workouts) {
+      if (typeof workout?.name !== 'string' || !workout.name.trim()) {
+        return res.status(400).json({ error: 'Every workout needs a name' });
+      }
+      for (const exercise of workout.exercises || []) {
+        if (!exercise?.exerciseId && !exercise?.createExerciseName) {
+          return res.status(400).json({ error: 'Every exercise needs a resolved exerciseId or createExerciseName' });
+        }
+        if (exercise.exerciseId) {
+          assertRowId(exercise.exerciseId, 'exerciseId');
+          const row = await catalystApp.datastore().table('Exercise').getRow(exercise.exerciseId).catch(() => null);
+          if (!isExerciseVisible(row, currentUser.userId)) {
+            return res.status(400).json({ error: `Unknown exercise: ${exercise.exerciseId}` });
+          }
+        }
+        for (const set of exercise.sets || []) {
+          if (set.type !== undefined && !VALID_SET_TYPES.includes(set.type)) {
+            return res.status(400).json({ error: `Invalid set type "${set.type}"` });
+          }
+          if (
+            set.targetRepsMin !== undefined &&
+            set.targetRepsMax !== undefined &&
+            Number(set.targetRepsMin) > Number(set.targetRepsMax)
+          ) {
+            return res.status(400).json({ error: 'Invalid target repetition range' });
+          }
+        }
+      }
+    }
+
+    const planTable = catalystApp.datastore().table('TrainingPlan');
+    const workoutTable = catalystApp.datastore().table('PlanWorkout');
+    const exerciseTable = catalystApp.datastore().table('PlanExercise');
+    const setTable = catalystApp.datastore().table('PlanSet');
+    const exerciseLibraryTable = catalystApp.datastore().table('Exercise');
+
+    const newPlan = await planTable.insertRow(
+      compact({
+        user_id: currentUser.userId,
+        name,
+        description: doc?.description || '',
+        duration_weeks: durationWeeks,
+        start_date: doc?.startDate || null,
+        status: 'draft',
+        schema_version: doc?.schemaVersion || '1.0',
+        plan_version: 1
+      })
+    );
+
+    // Never silently create a duplicate custom exercise (spec section 7):
+    // reuse an existing match if one exists, and reuse whatever this same
+    // import already created for the same name across workouts.
+    const matchIndex = await buildExerciseMatchIndex(catalystApp, currentUser.userId);
+    const createdByName = new Map();
+
+    for (const [workoutIndex, workout] of workouts.entries()) {
+      const newWorkout = await workoutTable.insertRow(
+        compact({
+          plan_id: newPlan.ROWID,
+          name: workout.name.trim(),
+          description: workout.description || '',
+          order_index: workoutIndex,
+          notes: workout.notes || '',
+          estimated_duration_min: workout.estimatedDurationMinutes ?? null
+        })
+      );
+
+      const exercises = workout.exercises || [];
+      for (const [exerciseIndex, exercise] of exercises.entries()) {
+        let exerciseId = exercise.exerciseId || null;
+
+        if (!exerciseId && exercise.createExerciseName) {
+          const trimmedName = exercise.createExerciseName.trim();
+          const cacheKey = trimmedName.toLowerCase();
+          if (createdByName.has(cacheKey)) {
+            exerciseId = createdByName.get(cacheKey);
+          } else {
+            const { exercise: existing } = matchExerciseName(matchIndex, trimmedName);
+            if (existing) {
+              exerciseId = existing.ROWID;
+            } else {
+              const created = await exerciseLibraryTable.insertRow({
+                owner_user_id: currentUser.userId,
+                name: trimmedName,
+                metric_type: 'reps_weight',
+                scope: 'user',
+                is_active: true
+              });
+              exerciseId = created.ROWID;
+            }
+            createdByName.set(cacheKey, exerciseId);
+          }
+        }
+
+        const newExercise = await exerciseTable.insertRow(
+          compact({
+            plan_workout_id: newWorkout.ROWID,
+            exercise_id: exerciseId,
+            order_index: exerciseIndex,
+            notes: exercise.notes || '',
+            rest_seconds: exercise.restSeconds ?? null
+          })
+        );
+
+        const sets = exercise.sets || [];
+        if (sets.length) {
+          await setTable.insertRows(
+            sets.map((set, setIndex) =>
+              compact({
+                plan_exercise_id: newExercise.ROWID,
+                order_index: setIndex,
+                set_type: set.type || 'working',
+                target_reps: set.targetReps ?? null,
+                target_reps_min: set.targetRepsMin ?? null,
+                target_reps_max: set.targetRepsMax ?? null,
+                target_rir: set.targetRIR ?? null,
+                target_rpe: set.targetRPE ?? null,
+                target_weight: set.targetWeight ?? null,
+                duration: set.duration ?? null,
+                distance: set.distance ?? null,
+                notes: set.notes || ''
+              })
+            )
+          );
+        }
+      }
+    }
+
+    res.status(201).json({ plan: await loadPlanTree(catalystApp, newPlan) });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/:planId', async (req, res, next) => {
   try {
     res.json({ plan: await loadPlanTree(req.catalystApp, req.plan) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Clean application-level schema, no Catalyst IDs (spec section 24) — safe
+// to hand to an AI assistant or paste into another instance of this app.
+router.get('/:planId/export', async (req, res, next) => {
+  try {
+    const { catalystApp, plan } = req;
+    const workouts = await fetchOrdered(catalystApp, 'PlanWorkout', 'plan_id', plan.ROWID);
+    const getExerciseInfo = makeExerciseInfoLookup(catalystApp);
+
+    const exportWorkouts = [];
+    for (const workout of workouts) {
+      const exercises = await fetchOrdered(catalystApp, 'PlanExercise', 'plan_workout_id', workout.ROWID);
+      const exportExercises = [];
+
+      for (const exercise of exercises) {
+        const sets = await fetchOrdered(catalystApp, 'PlanSet', 'plan_exercise_id', exercise.ROWID);
+        const info = await getExerciseInfo(exercise.exercise_id);
+
+        exportExercises.push({
+          exercise: info?.name ?? 'Unknown exercise',
+          restSeconds: numOrNull(exercise.rest_seconds) ?? undefined,
+          notes: exercise.notes || undefined,
+          sets: sets.map((set) => ({
+            type: set.set_type,
+            targetReps: numOrNull(set.target_reps) ?? undefined,
+            targetRepsMin: numOrNull(set.target_reps_min) ?? undefined,
+            targetRepsMax: numOrNull(set.target_reps_max) ?? undefined,
+            targetRIR: numOrNull(set.target_rir) ?? undefined,
+            targetRPE: numOrNull(set.target_rpe) ?? undefined,
+            targetWeight: numOrNull(set.target_weight) ?? undefined,
+            duration: numOrNull(set.duration) ?? undefined,
+            distance: numOrNull(set.distance) ?? undefined,
+            notes: set.notes || undefined
+          }))
+        });
+      }
+
+      exportWorkouts.push({
+        name: workout.name,
+        description: workout.description || undefined,
+        notes: workout.notes || undefined,
+        estimatedDurationMinutes: numOrNull(workout.estimated_duration_min) ?? undefined,
+        exercises: exportExercises
+      });
+    }
+
+    res.json({
+      schemaVersion: plan.schema_version || '1.0',
+      name: plan.name,
+      description: plan.description || undefined,
+      durationWeeks: numOrNull(plan.duration_weeks),
+      startDate: plan.start_date || null,
+      workouts: exportWorkouts
+    });
   } catch (err) {
     next(err);
   }
