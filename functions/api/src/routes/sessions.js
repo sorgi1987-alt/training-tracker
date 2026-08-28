@@ -37,7 +37,7 @@ async function getPreviousPerformance(catalystApp, userId, exerciseId, excludeSe
   if (!previous) return null;
   const sets = await fetchWhere(catalystApp, 'SessionSet', 'session_exercise_id', previous.ROWID, 'order_index');
   return sets
-    .filter((set) => !isTrue(set.skipped))
+    .filter((set) => isTrue(set.completed) && !isTrue(set.skipped))
     .map((set) => ({ type: set.set_type, weight: numOrNull(set.weight), reps: numOrNull(set.reps) }));
 }
 
@@ -181,9 +181,17 @@ router.get('/', async (req, res, next) => {
     if (typeof req.query.status === 'string') {
       query += ` AND status = '${req.query.status.replace(/[^a-z_]/g, '')}'`;
     }
+    if (typeof req.query.planId === 'string') {
+      query += ` AND plan_id = '${assertRowId(req.query.planId, 'planId')}'`;
+    }
+    if (typeof req.query.planWorkoutId === 'string') {
+      query += ` AND plan_workout_id = '${assertRowId(req.query.planWorkoutId, 'planWorkoutId')}'`;
+    }
     const rows = await zcqlSelect(req.catalystApp, 'WorkoutSession', query);
     rows.sort((a, b) => (b.started_time || '').localeCompare(a.started_time || ''));
-    res.json({ sessions: rows.map((row) => toSessionDTO(row)) });
+
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+    res.json({ sessions: rows.slice(0, limit).map((row) => toSessionDTO(row)) });
   } catch (err) {
     next(err);
   }

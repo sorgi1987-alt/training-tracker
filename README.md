@@ -7,14 +7,14 @@ Full product spec: [`zoho_catalyst_training_tracker_claude_prompt.md`](./zoho_ca
 
 ## Status
 
-**Phase 1 — Foundation**, **Phase 2 — Exercise Library**, **Phase 3 —
-Plans**, and **Phase 4 — Workout Logging** are complete and deployed.
-Embedded email/password authentication is live and verified end-to-end.
-Public self-signup is off (console-only toggle, not flipped by choice yet)
-— new users are added via Catalyst's Add User (invite email) for now.
+**Phase 1 — Foundation** through **Phase 5 — History** are complete and
+deployed. Embedded email/password authentication is live and verified
+end-to-end. Public self-signup is off (console-only toggle, not flipped by
+choice yet) — new users are added via Catalyst's Add User (invite email)
+for now.
 
-Later phases (history views, JSON import/export, rest timer, offline sync)
-are designed but not built yet.
+Later phases (JSON import/export, rest timer, offline sync) are designed
+but not built yet.
 
 ## Architecture
 
@@ -171,6 +171,25 @@ visible without leaving the workout screen. Finishing/abandoning a session
 only ever changes its own `status`/`completed_time`; a plan is never
 touched by anything that happens during a session.
 
+### History
+
+The History tab and a session's detail view (`GET/PATCH /sessions/:id` and
+the nested exercise/set routes) are the same endpoints Phase 4 built —
+editing a completed or abandoned session works identically to editing an
+in-progress one (spec section 9 requires this), so `client/src/components/SessionExerciseEditor.tsx`
+is shared between the active-workout screen and the history detail screen.
+The one difference is `allowSubstitute`: substituting an exercise is a
+during-the-workout action (section 12), not something spec asks for when
+correcting history afterwards, so the history view hides that control.
+`GET /sessions` supports `status`/`planId`/`planWorkoutId` filters and a
+capped `limit` (default 50) for the list.
+
+`GET /exercises/:id/history` now also returns `personalRecords` — heaviest
+set, best estimated one-rep max (Epley formula, documented in the response),
+and highest single-session volume — computed across the exercise's full
+session history, not just the 10 most recent performances shown in the
+history list itself.
+
 ### Exercise library
 
 `Exercise` rows are either system-owned (`owner_user_id` null, visible to
@@ -188,10 +207,6 @@ system exercises, never another user's.
 
 ## Known limitations
 
-- A dedicated history browsing view (session list, exercise PR tracking)
-  isn't built yet (Phase 5) — the Exercise Detail page's history section
-  and Home's active-plan/in-progress-session cards are the only history
-  surfaces so far.
 - The "next workout" suggestion on the Workout tab is a simple sequence
   position (last completed workout + 1, wrapping around) — no smarter
   scheduling.

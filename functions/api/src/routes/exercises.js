@@ -79,9 +79,10 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-// Exercise history is derived from actual sessions, never from plans (spec
-// section 14). Up to the 10 most recent times this user performed this
-// exercise, most recent first, skipped sets excluded.
+// Exercise history and PRs are derived from actual sessions, never from
+// plans (spec section 14/15). `history` returns the 10 most recent
+// performances for display; personalRecords are computed across the full
+// history, not just the displayed slice.
 router.get('/:id/history', async (req, res, next) => {
   try {
     const catalystApp = req.catalystApp;
@@ -97,20 +98,59 @@ router.get('/:id/history', async (req, res, next) => {
     sessionExercises.sort((a, b) => (b.CREATEDTIME || '').localeCompare(a.CREATEDTIME || ''));
 
     const history = [];
-    for (const sessionExercise of sessionExercises.slice(0, 10)) {
+    let highestWeight = null;
+    let repsAtHighestWeight = null;
+    let bestEstimated1RM = null;
+    let highestSessionVolume = null;
+
+    for (const [index, sessionExercise] of sessionExercises.entries()) {
       const session = await catalystApp.datastore().table('WorkoutSession').getRow(sessionExercise.session_id).catch(() => null);
       if (!session) continue;
 
       const sets = await fetchWhere(catalystApp, 'SessionSet', 'session_exercise_id', sessionExercise.ROWID, 'order_index');
-      const loggedSets = sets
-        .filter((set) => !isTrue(set.skipped))
+      const performedSets = sets
+        .filter((set) => isTrue(set.completed) && !isTrue(set.skipped))
         .map((set) => ({ weight: numOrNull(set.weight), reps: numOrNull(set.reps), type: set.set_type }));
-      if (loggedSets.length === 0) continue;
+      if (performedSets.length === 0) continue;
 
-      history.push({ sessionId: session.ROWID, date: toIsoOrNull(session.started_time), sets: loggedSets });
+      let sessionVolume = 0;
+      for (const set of performedSets) {
+        if (set.weight == null || set.reps == null) continue;
+        sessionVolume += set.weight * set.reps;
+
+        if (highestWeight === null || set.weight > highestWeight) {
+          highestWeight = set.weight;
+          repsAtHighestWeight = set.reps;
+        } else if (set.weight === highestWeight && set.reps > (repsAtHighestWeight ?? 0)) {
+          repsAtHighestWeight = set.reps;
+        }
+
+        // Epley formula (documented per spec section 15).
+        const estimated1RM = Math.round(set.weight * (1 + set.reps / 30) * 10) / 10;
+        if (bestEstimated1RM === null || estimated1RM > bestEstimated1RM) {
+          bestEstimated1RM = estimated1RM;
+        }
+      }
+
+      if (sessionVolume > 0 && (highestSessionVolume === null || sessionVolume > highestSessionVolume)) {
+        highestSessionVolume = Math.round(sessionVolume * 10) / 10;
+      }
+
+      if (index < 10) {
+        history.push({ sessionId: session.ROWID, date: toIsoOrNull(session.started_time), sets: performedSets });
+      }
     }
 
-    res.json({ history });
+    res.json({
+      history,
+      personalRecords: {
+        highestWeight,
+        repsAtHighestWeight,
+        bestEstimated1RM,
+        estimated1RMFormula: 'Epley: weight × (1 + reps ÷ 30)',
+        highestSessionVolume
+      }
+    });
   } catch (err) {
     next(err);
   }

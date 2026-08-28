@@ -3,7 +3,6 @@ import { RequireAuth } from './auth/RequireAuth';
 import { AppShell } from './layouts/AppShell';
 import { Login } from './pages/Login';
 import { Home } from './pages/Home';
-import { Placeholder } from './pages/Placeholder';
 import { Exercises } from './pages/Exercises';
 import { ExerciseDetail } from './pages/ExerciseDetail';
 import { NewExercise } from './pages/NewExercise';
@@ -12,6 +11,8 @@ import { NewPlan } from './pages/NewPlan';
 import { PlanDetail } from './pages/PlanDetail';
 import { WorkoutDetail } from './pages/WorkoutDetail';
 import { Workout } from './pages/Workout';
+import { History } from './pages/History';
+import { SessionDetail } from './pages/SessionDetail';
 import { More } from './pages/More';
 
 export function App() {
@@ -22,10 +23,8 @@ export function App() {
         <Route element={<AppShell />}>
           <Route path="/" element={<Home />} />
           <Route path="/workout" element={<Workout />} />
-          <Route
-            path="/history"
-            element={<Placeholder title="History" note="Session history arrives in Phase 5." />}
-          />
+          <Route path="/history" element={<History />} />
+          <Route path="/history/:id" element={<SessionDetail />} />
           <Route path="/exercises" element={<Exercises />} />
           <Route path="/exercises/new" element={<NewExercise />} />
           <Route path="/exercises/:id" element={<ExerciseDetail />} />

@@ -9,6 +9,14 @@ interface ExerciseHistoryEntry {
   sets: { weight: number | null; reps: number | null; type: string }[];
 }
 
+interface PersonalRecords {
+  highestWeight: number | null;
+  repsAtHighestWeight: number | null;
+  bestEstimated1RM: number | null;
+  estimated1RMFormula: string;
+  highestSessionVolume: number | null;
+}
+
 export function ExerciseDetail() {
   const { id } = useParams<{ id: string }>();
   const { data, isLoading, isError } = useQuery({
@@ -19,7 +27,7 @@ export function ExerciseDetail() {
 
   const history = useQuery({
     queryKey: ['exercise-history', id],
-    queryFn: () => apiFetch<{ history: ExerciseHistoryEntry[] }>(`/exercises/${id}/history`),
+    queryFn: () => apiFetch<{ history: ExerciseHistoryEntry[]; personalRecords: PersonalRecords }>(`/exercises/${id}/history`),
     enabled: Boolean(id)
   });
 
@@ -27,6 +35,8 @@ export function ExerciseDetail() {
   if (isError || !data) return <div className="page page-subtitle">Exercise not found.</div>;
 
   const { exercise } = data;
+  const records = history.data?.personalRecords;
+  const hasRecords = records && (records.highestWeight !== null || records.bestEstimated1RM !== null);
 
   return (
     <div className="page">
@@ -49,6 +59,30 @@ export function ExerciseDetail() {
         <section className="card">
           <h2 className="card-title">Instructions</h2>
           <p>{exercise.instructions}</p>
+        </section>
+      )}
+
+      {hasRecords && (
+        <section className="card">
+          <h2 className="card-title">Personal records</h2>
+          <ul className="pr-list">
+            {records!.highestWeight !== null && (
+              <li>
+                Heaviest set: <strong>{records!.highestWeight} kg × {records!.repsAtHighestWeight}</strong>
+              </li>
+            )}
+            {records!.bestEstimated1RM !== null && (
+              <li>
+                Best estimated 1RM: <strong>{records!.bestEstimated1RM} kg</strong>
+              </li>
+            )}
+            {records!.highestSessionVolume !== null && (
+              <li>
+                Best session volume: <strong>{records!.highestSessionVolume} kg</strong>
+              </li>
+            )}
+          </ul>
+          <p className="pr-formula">1RM estimated using {records!.estimated1RMFormula}.</p>
         </section>
       )}
 
