@@ -7,14 +7,14 @@ Full product spec: [`zoho_catalyst_training_tracker_claude_prompt.md`](./zoho_ca
 
 ## Status
 
-**Phase 1 — Foundation**, **Phase 2 — Exercise Library**, and **Phase 3 —
-Plans** are complete and deployed. Embedded email/password authentication is
-live and verified end-to-end. Public self-signup is off (console-only
-toggle, not flipped by choice yet) — new users are added via Catalyst's Add
-User (invite email) for now.
+**Phase 1 — Foundation**, **Phase 2 — Exercise Library**, **Phase 3 —
+Plans**, and **Phase 4 — Workout Logging** are complete and deployed.
+Embedded email/password authentication is live and verified end-to-end.
+Public self-signup is off (console-only toggle, not flipped by choice yet)
+— new users are added via Catalyst's Add User (invite email) for now.
 
-Later phases (workout logging, history, JSON import/export, rest timer,
-offline sync) are designed but not built yet.
+Later phases (history views, JSON import/export, rest timer, offline sync)
+are designed but not built yet.
 
 ## Architecture
 
@@ -102,23 +102,34 @@ no trailing slash), and test through `catalyst serve` — never a bare
 ## Data Store
 
 Tables so far: `TrainingPlan`, `PlanWorkout`, `PlanExercise`, `PlanSet`,
-`Exercise`, `ExerciseAlias`, `WorkoutSession`, `UserPreferences`. Relations
-between tables are stored as plain ROWID-reference columns (e.g.
-`WorkoutSession.plan_id`, `PlanExercise.exercise_id`), not native Catalyst
-foreign-key columns, and are enforced at the `functions/api` layer rather
-than by the database — this keeps delete/soft-delete behavior (plans must
-never destroy historical sessions) predictable and explicit. The remaining
-tables (`SessionExercise`, `SessionSet`, `BodyMeasurement`) are added in
-later phases as their features are built.
+`Exercise`, `ExerciseAlias`, `WorkoutSession`, `SessionExercise`,
+`SessionSet`, `UserPreferences`. Relations between tables are stored as
+plain ROWID-reference columns (e.g. `WorkoutSession.plan_id`,
+`PlanExercise.exercise_id`), not native Catalyst foreign-key columns, and
+are enforced at the `functions/api` layer rather than by the database —
+this keeps delete/soft-delete behavior (plans must never destroy historical
+sessions) predictable and explicit. `BodyMeasurement` is added in a later
+phase as that feature is built.
 
-**Every new table needs its permissions widened before it's usable.**
-Catalyst creates tables with the `App User` role defaulting to `SELECT`
-only — any insert/update/delete from a real logged-in (non-admin) user 401s
-with `NO_ACCESS` until `Update_Table_Permissions` grants `App User` full
-CRUD too. This is a separate, coarser gate from `functions/api`'s own
-per-user ownership checks; both need to be right. Hit this in Phase 3 when
-plan creation failed silently in the UI — check `Get_Logs` for `NO_ACCESS`
-first if a new write endpoint doesn't work.
+Two things every new table/column needs before they're usable — both
+found the hard way, mid-phase, when a button silently did nothing in the UI:
+
+- **Permissions.** Catalyst creates tables with the `App User` role
+  defaulting to `SELECT` only — any insert/update/delete from a real
+  logged-in (non-admin) user 401s with `NO_ACCESS` until
+  `Update_Table_Permissions` grants `App User` full CRUD too. Separate,
+  coarser gate from `functions/api`'s own per-user ownership checks; both
+  need to be right.
+- **Datetime format.** Any `datetime` column (including reading the
+  built-in `CREATEDTIME`/`MODIFIEDTIME`) needs to go through
+  `toCatalystDateTime()` / `fromCatalystDateTime()` / `toIsoOrNull()` in
+  `functions/api/src/lib/db.js` — never a native `Date`/ISO string. Catalyst
+  writes want `YYYY-MM-DD HH:MM:SS` (no milliseconds) in the project's own
+  timezone (Europe/Madrid here); what it returns on read has a trailing
+  `:mmm` and is easy to mistake for the write format.
+
+Check `Get_Logs` for `NO_ACCESS` or `INVALID_INPUT`/`datetime value
+expected` first whenever a new write endpoint doesn't work.
 
 ### Plans
 
@@ -143,6 +154,23 @@ interpret a partial reorder. There's no plan `DELETE` endpoint in v1 —
 `archive` is the only removal path, since a plan may be referenced by
 historical sessions once Phase 4 exists.
 
+### Workout sessions
+
+Starting a workout (`POST /sessions` with a `planWorkoutId`) **snapshots**
+the plan workout's exercises and sets into `SessionExercise`/`SessionSet`
+rows at that exact moment — the core rule from spec section 2. Later edits
+to the plan never touch an existing session; `SessionExercise` stores both
+`planned_exercise_id` and `actual_exercise_id` (both direct references to
+the `Exercise` catalog, not to the mutable `PlanExercise` row) so a
+mid-session substitution is fully independent of the plan. An ad-hoc session
+with no `planWorkoutId` is also supported. New sets are prefilled from
+whatever the user last logged for that exercise (falling back to the plan's
+target weight), and each session exercise carries its own
+`previousPerformance` for the same reason — spec section 13 wants that
+visible without leaving the workout screen. Finishing/abandoning a session
+only ever changes its own `status`/`completed_time`; a plan is never
+touched by anything that happens during a session.
+
 ### Exercise library
 
 `Exercise` rows are either system-owned (`owner_user_id` null, visible to
@@ -160,11 +188,18 @@ system exercises, never another user's.
 
 ## Known limitations
 
-- Workout logging and history are not built yet (Phases 4-5).
+- A dedicated history browsing view (session list, exercise PR tracking)
+  isn't built yet (Phase 5) — the Exercise Detail page's history section
+  and Home's active-plan/in-progress-session cards are the only history
+  surfaces so far.
+- The "next workout" suggestion on the Workout tab is a simple sequence
+  position (last completed workout + 1, wrapping around) — no smarter
+  scheduling.
+- The rest timer, progression suggestions, and offline resilience for an
+  active workout (Phase 7) are not built.
 - The exercise search endpoint fetches all visible rows and filters in
   memory rather than querying — fine at the curated library's current scale
   (~100 rows) but would need revisiting if the library grows much larger.
 - The PWA service worker registration hasn't been verified in a real mobile
   browser yet (only checked in an automated browser pane, which may restrict
   Service Worker APIs regardless of app correctness).
-- Offline resilience for active workouts (Phase 7) is not built.

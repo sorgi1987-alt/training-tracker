@@ -11,6 +11,7 @@ import { Plans } from './pages/Plans';
 import { NewPlan } from './pages/NewPlan';
 import { PlanDetail } from './pages/PlanDetail';
 import { WorkoutDetail } from './pages/WorkoutDetail';
+import { Workout } from './pages/Workout';
 import { More } from './pages/More';
 
 export function App() {
@@ -20,10 +21,7 @@ export function App() {
       <Route element={<RequireAuth />}>
         <Route element={<AppShell />}>
           <Route path="/" element={<Home />} />
-          <Route
-            path="/workout"
-            element={<Placeholder title="Workout" note="Active workout logging arrives in Phase 4." />}
-          />
+          <Route path="/workout" element={<Workout />} />
           <Route
             path="/history"
             element={<Placeholder title="History" note="Session history arrives in Phase 5." />}

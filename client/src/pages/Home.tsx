@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '../lib/apiClient';
 import type { Plan } from '../types/plan';
+import type { WorkoutSession } from '../types/session';
 
 interface WhoAmI {
   user: {
@@ -24,12 +25,29 @@ export function Home() {
     queryFn: () => apiFetch<{ plans: Plan[] }>('/plans')
   });
 
+  const inProgress = useQuery({
+    queryKey: ['sessions', 'in_progress'],
+    queryFn: () => apiFetch<{ sessions: WorkoutSession[] }>('/sessions?status=in_progress')
+  });
+
   const activePlan = plans.data?.plans.find((plan) => plan.status === 'active');
+  const activeSession = inProgress.data?.sessions[0];
 
   return (
     <div className="page">
       <h1 className="page-title">Home</h1>
       <p className="page-subtitle">Signed in</p>
+
+      {activeSession && (
+        <section className="card">
+          <h2 className="card-title">Workout in progress</h2>
+          <p>
+            <strong>{activeSession.name}</strong>
+            <br />
+            <Link to="/workout">Resume workout</Link>
+          </p>
+        </section>
+      )}
 
       <section className="card">
         <h2 className="card-title">Active plan</h2>
@@ -45,6 +63,12 @@ export function Home() {
             {weekLabel(activePlan)}
             <br />
             <Link to={`/plans/${activePlan.id}`}>View plan</Link>
+            {!activeSession && (
+              <>
+                {' · '}
+                <Link to="/workout">Start Workout</Link>
+              </>
+            )}
           </p>
         )}
       </section>
@@ -59,11 +83,6 @@ export function Home() {
             server-side — never sent by this client).
           </p>
         )}
-      </section>
-
-      <section className="card">
-        <h2 className="card-title">Coming soon</h2>
-        <p>Starting and logging an actual workout session arrives in Phase 4.</p>
       </section>
     </div>
   );

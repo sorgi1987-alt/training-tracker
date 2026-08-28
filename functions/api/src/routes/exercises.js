@@ -4,6 +4,7 @@ const { Router } = require('express');
 const { requireUser } = require('../middleware/requireUser');
 const { normalizeName } = require('../lib/normalizeName');
 const { isExerciseVisible, isActiveRow } = require('../lib/exerciseVisibility');
+const { assertRowId, zcqlSelect, numOrNull, isTrue, fetchWhere, toIsoOrNull } = require('../lib/db');
 
 const router = Router();
 router.use(requireUser);
@@ -73,6 +74,43 @@ router.get('/:id', async (req, res, next) => {
     }
 
     res.json({ exercise: toExerciseDTO(row) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Exercise history is derived from actual sessions, never from plans (spec
+// section 14). Up to the 10 most recent times this user performed this
+// exercise, most recent first, skipped sets excluded.
+router.get('/:id/history', async (req, res, next) => {
+  try {
+    const catalystApp = req.catalystApp;
+    const exerciseId = assertRowId(req.params.id, 'id');
+    const exerciseRow = await catalystApp.datastore().table('Exercise').getRow(exerciseId).catch(() => null);
+    if (!exerciseRow || !isActiveRow(exerciseRow) || !isExerciseVisible(exerciseRow, req.currentUser.userId)) {
+      return res.status(404).json({ error: 'Exercise not found' });
+    }
+
+    const userId = assertRowId(req.currentUser.userId, 'userId');
+    const query = `SELECT * FROM SessionExercise WHERE user_id = '${userId}' AND actual_exercise_id = '${exerciseId}'`;
+    const sessionExercises = await zcqlSelect(catalystApp, 'SessionExercise', query);
+    sessionExercises.sort((a, b) => (b.CREATEDTIME || '').localeCompare(a.CREATEDTIME || ''));
+
+    const history = [];
+    for (const sessionExercise of sessionExercises.slice(0, 10)) {
+      const session = await catalystApp.datastore().table('WorkoutSession').getRow(sessionExercise.session_id).catch(() => null);
+      if (!session) continue;
+
+      const sets = await fetchWhere(catalystApp, 'SessionSet', 'session_exercise_id', sessionExercise.ROWID, 'order_index');
+      const loggedSets = sets
+        .filter((set) => !isTrue(set.skipped))
+        .map((set) => ({ weight: numOrNull(set.weight), reps: numOrNull(set.reps), type: set.set_type }));
+      if (loggedSets.length === 0) continue;
+
+      history.push({ sessionId: session.ROWID, date: toIsoOrNull(session.started_time), sets: loggedSets });
+    }
+
+    res.json({ history });
   } catch (err) {
     next(err);
   }

@@ -3,18 +3,14 @@
 const { Router } = require('express');
 const { requireUser } = require('../middleware/requireUser');
 const { isExerciseVisible } = require('../lib/exerciseVisibility');
-const { assertRowId, zcqlSelect, compact, numOrNull } = require('../lib/db');
+const { assertRowId, zcqlSelect, compact, numOrNull, fetchWhere, toIsoOrNull } = require('../lib/db');
 
 const router = Router();
 router.use(requireUser);
 
 // ---- data access helpers -------------------------------------------------
 
-async function fetchOrdered(catalystApp, tableName, whereColumn, whereId) {
-  const id = assertRowId(whereId, whereColumn);
-  const query = `SELECT * FROM ${tableName} WHERE ${whereColumn} = '${id}' ORDER BY order_index ASC`;
-  return zcqlSelect(catalystApp, tableName, query);
-}
+const fetchOrdered = fetchWhere;
 
 function exerciseRowToInfo(row) {
   return row ? { name: row.name, primaryMuscle: row.primary_muscle || null, equipment: row.equipment || null } : null;
@@ -77,8 +73,8 @@ function toPlanDTO(row, workouts) {
     status: row.status,
     schemaVersion: row.schema_version || '1.0',
     planVersion: numOrNull(row.plan_version) ?? 1,
-    createdTime: row.CREATEDTIME,
-    modifiedTime: row.MODIFIEDTIME,
+    createdTime: toIsoOrNull(row.CREATEDTIME),
+    modifiedTime: toIsoOrNull(row.MODIFIEDTIME),
     ...(workouts ? { workouts } : {})
   };
 }
