@@ -1,9 +1,9 @@
 'use strict';
 
 const { Router } = require('express');
-const catalyst = require('zcatalyst-sdk-node');
 const { requireUser } = require('../middleware/requireUser');
 const { normalizeName } = require('../lib/normalizeName');
+const { isExerciseVisible, isActiveRow } = require('../lib/exerciseVisibility');
 
 const router = Router();
 router.use(requireUser);
@@ -28,11 +28,7 @@ async function fetchVisibleExercises(catalystApp, userId) {
     nextToken = next_token;
   }
 
-  return rows.filter((row) => isActive(row) && (!row.owner_user_id || row.owner_user_id === userId));
-}
-
-function isActive(row) {
-  return row.is_active === true || row.is_active === 'true';
+  return rows.filter((row) => isActiveRow(row) && isExerciseVisible(row, userId));
 }
 
 function toExerciseDTO(row) {
@@ -52,7 +48,7 @@ function toExerciseDTO(row) {
 
 router.get('/', async (req, res, next) => {
   try {
-    const catalystApp = catalyst.initialize(req);
+    const catalystApp = req.catalystApp;
     const rows = await fetchVisibleExercises(catalystApp, req.currentUser.userId);
 
     const q = (req.query.q ?? '').toString().trim().toLowerCase();
@@ -68,11 +64,11 @@ router.get('/', async (req, res, next) => {
 
 router.get('/:id', async (req, res, next) => {
   try {
-    const catalystApp = catalyst.initialize(req);
+    const catalystApp = req.catalystApp;
     const table = catalystApp.datastore().table('Exercise');
     const row = await table.getRow(req.params.id).catch(() => null);
 
-    if (!row || !isActive(row) || (row.owner_user_id && row.owner_user_id !== req.currentUser.userId)) {
+    if (!row || !isActiveRow(row) || !isExerciseVisible(row, req.currentUser.userId)) {
       return res.status(404).json({ error: 'Exercise not found' });
     }
 
@@ -89,7 +85,7 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({ error: 'name is required' });
     }
 
-    const catalystApp = catalyst.initialize(req);
+    const catalystApp = req.catalystApp;
     const normalized = normalizeName(name);
     const visible = await fetchVisibleExercises(catalystApp, req.currentUser.userId);
     const duplicate = visible.find((row) => normalizeName(row.name) === normalized);
@@ -134,7 +130,7 @@ const PATCHABLE_FIELDS = {
 
 router.patch('/:id', async (req, res, next) => {
   try {
-    const catalystApp = catalyst.initialize(req);
+    const catalystApp = req.catalystApp;
     const table = catalystApp.datastore().table('Exercise');
     const row = await table.getRow(req.params.id).catch(() => null);
 
@@ -158,7 +154,7 @@ router.patch('/:id', async (req, res, next) => {
 
 router.delete('/:id', async (req, res, next) => {
   try {
-    const catalystApp = catalyst.initialize(req);
+    const catalystApp = req.catalystApp;
     const table = catalystApp.datastore().table('Exercise');
     const row = await table.getRow(req.params.id).catch(() => null);
 

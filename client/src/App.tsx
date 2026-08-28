@@ -7,6 +7,11 @@ import { Placeholder } from './pages/Placeholder';
 import { Exercises } from './pages/Exercises';
 import { ExerciseDetail } from './pages/ExerciseDetail';
 import { NewExercise } from './pages/NewExercise';
+import { Plans } from './pages/Plans';
+import { NewPlan } from './pages/NewPlan';
+import { PlanDetail } from './pages/PlanDetail';
+import { WorkoutDetail } from './pages/WorkoutDetail';
+import { More } from './pages/More';
 
 export function App() {
   return (
@@ -26,10 +31,11 @@ export function App() {
           <Route path="/exercises" element={<Exercises />} />
           <Route path="/exercises/new" element={<NewExercise />} />
           <Route path="/exercises/:id" element={<ExerciseDetail />} />
-          <Route
-            path="/more"
-            element={<Placeholder title="More" note="Settings, body weight and import/export land in later phases." />}
-          />
+          <Route path="/plans" element={<Plans />} />
+          <Route path="/plans/new" element={<NewPlan />} />
+          <Route path="/plans/:id" element={<PlanDetail />} />
+          <Route path="/plans/:planId/workouts/:workoutId" element={<WorkoutDetail />} />
+          <Route path="/more" element={<More />} />
         </Route>
       </Route>
     </Routes>

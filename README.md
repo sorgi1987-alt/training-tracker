@@ -7,14 +7,14 @@ Full product spec: [`zoho_catalyst_training_tracker_claude_prompt.md`](./zoho_ca
 
 ## Status
 
-**Phase 1 — Foundation** and **Phase 2 — Exercise Library** are complete and
-deployed. Embedded email/password authentication is live and verified
-end-to-end. Public self-signup is off (console-only toggle, not flipped by
-choice yet) — new users are added via Catalyst's Add User (invite email) for
-now.
+**Phase 1 — Foundation**, **Phase 2 — Exercise Library**, and **Phase 3 —
+Plans** are complete and deployed. Embedded email/password authentication is
+live and verified end-to-end. Public self-signup is off (console-only
+toggle, not flipped by choice yet) — new users are added via Catalyst's Add
+User (invite email) for now.
 
-Later phases (plan CRUD, workout logging, history, JSON import/export, rest
-timer, offline sync) are designed but not built yet.
+Later phases (workout logging, history, JSON import/export, rest timer,
+offline sync) are designed but not built yet.
 
 ## Architecture
 
@@ -101,15 +101,47 @@ no trailing slash), and test through `catalyst serve` — never a bare
 
 ## Data Store
 
-Tables so far: `TrainingPlan`, `Exercise`, `ExerciseAlias`, `WorkoutSession`,
-`UserPreferences`. Relations between tables are stored as plain
-ROWID-reference columns (e.g. `WorkoutSession.plan_id`, `ExerciseAlias.exercise_id`),
-not native Catalyst foreign-key columns, and are enforced at the
-`functions/api` layer rather than by the database — this keeps delete/soft-delete
-behavior (plans must never destroy historical sessions) predictable and
-explicit. The remaining tables (`PlanWorkout`, `PlanExercise`, `PlanSet`,
-`SessionExercise`, `SessionSet`, `BodyMeasurement`) are added in later phases
-as their features are built.
+Tables so far: `TrainingPlan`, `PlanWorkout`, `PlanExercise`, `PlanSet`,
+`Exercise`, `ExerciseAlias`, `WorkoutSession`, `UserPreferences`. Relations
+between tables are stored as plain ROWID-reference columns (e.g.
+`WorkoutSession.plan_id`, `PlanExercise.exercise_id`), not native Catalyst
+foreign-key columns, and are enforced at the `functions/api` layer rather
+than by the database — this keeps delete/soft-delete behavior (plans must
+never destroy historical sessions) predictable and explicit. The remaining
+tables (`SessionExercise`, `SessionSet`, `BodyMeasurement`) are added in
+later phases as their features are built.
+
+**Every new table needs its permissions widened before it's usable.**
+Catalyst creates tables with the `App User` role defaulting to `SELECT`
+only — any insert/update/delete from a real logged-in (non-admin) user 401s
+with `NO_ACCESS` until `Update_Table_Permissions` grants `App User` full
+CRUD too. This is a separate, coarser gate from `functions/api`'s own
+per-user ownership checks; both need to be right. Hit this in Phase 3 when
+plan creation failed silently in the UI — check `Get_Logs` for `NO_ACCESS`
+first if a new write endpoint doesn't work.
+
+### Plans
+
+A plan is a template: `TrainingPlan` → ordered `PlanWorkout`s → ordered
+`PlanExercise`s (referencing the shared `Exercise` library, never copying
+it) → ordered `PlanSet`s. `functions/api/src/routes/plans.js` verifies the
+whole ownership chain per request (a plan belongs to the caller; a workout
+belongs to that plan; an exercise belongs to that workout; a set belongs to
+that exercise) via Express `router.param()` handlers, so no nested route can
+be reached by forging an ID that happens to belong to someone else's plan.
+
+Only one plan can be `active` per user — `POST /plans/:id/activate`
+deactivates (back to `draft`) any other plan the same user has active in the
+same request, so the invariant can't be violated by two racing requests
+landing on different code paths. Status changes only ever happen through
+`activate`/`archive`/`complete`, never through the general `PATCH /plans/:id`,
+for the same reason. `POST /plans/:id/duplicate` deep-copies the whole
+workout/exercise/set tree as a new draft plan; reordering (`workouts/reorder`,
+`.../exercises/reorder`) takes a full ordered list of IDs and rejects
+anything that isn't exactly the current set, rather than trying to
+interpret a partial reorder. There's no plan `DELETE` endpoint in v1 —
+`archive` is the only removal path, since a plan may be referenced by
+historical sessions once Phase 4 exists.
 
 ### Exercise library
 
@@ -128,7 +160,7 @@ system exercises, never another user's.
 
 ## Known limitations
 
-- Plans, workout logging, and history are not built yet (Phases 3-5).
+- Workout logging and history are not built yet (Phases 4-5).
 - The exercise search endpoint fetches all visible rows and filters in
   memory rather than querying — fine at the curated library's current scale
   (~100 rows) but would need revisiting if the library grows much larger.
