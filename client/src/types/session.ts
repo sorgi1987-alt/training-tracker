@@ -11,6 +11,8 @@ export interface SessionSet {
   completed: boolean;
   skipped: boolean;
   notes: string | null;
+  targetRepsMin: number | null;
+  targetRepsMax: number | null;
 }
 
 export interface PreviousSetPerformance {
@@ -32,6 +34,7 @@ export interface SessionExercise {
   substituted: boolean;
   skipped: boolean;
   notes: string | null;
+  restSeconds: number | null;
   previousPerformance: PreviousSetPerformance[];
   sets: SessionSet[];
 }

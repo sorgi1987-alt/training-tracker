@@ -200,52 +200,58 @@ function ExerciseCard({
         </button>
       </div>
 
-      <ul className="plain-list">
+      <ul className="set-list">
         {exercise.sets.map((set, index) => (
-          <li key={set.id} className="set-row">
-            <span className="set-row-index">{index + 1}</span>
-            <select
-              className="set-input set-type"
-              defaultValue={set.type}
-              onChange={(e) => updateSet.mutate({ setId: set.id, patch: { type: e.target.value } })}
-            >
-              <option value="warmup">Warm-up</option>
-              <option value="working">Working</option>
-              <option value="backoff">Backoff</option>
-              <option value="dropset">Dropset</option>
-              <option value="failure">Failure</option>
-              <option value="other">Other</option>
-            </select>
-            <input
-              className="set-input"
-              type="number"
-              placeholder="Reps min"
-              defaultValue={set.targetRepsMin ?? ''}
-              onBlur={(e) =>
-                updateSet.mutate({ setId: set.id, patch: { targetRepsMin: e.target.value === '' ? null : Number(e.target.value) } })
-              }
-            />
-            <input
-              className="set-input"
-              type="number"
-              placeholder="Reps max"
-              defaultValue={set.targetRepsMax ?? ''}
-              onBlur={(e) =>
-                updateSet.mutate({ setId: set.id, patch: { targetRepsMax: e.target.value === '' ? null : Number(e.target.value) } })
-              }
-            />
-            <input
-              className="set-input"
-              type="number"
-              placeholder="kg"
-              defaultValue={set.targetWeight ?? ''}
-              onBlur={(e) =>
-                updateSet.mutate({ setId: set.id, patch: { targetWeight: e.target.value === '' ? null : Number(e.target.value) } })
-              }
-            />
-            <button className="icon-button" onClick={() => deleteSet.mutate(set.id)} aria-label="Remove set">
-              ✕
-            </button>
+          <li key={set.id} className={`set-row set-row-${set.type}`}>
+            <div className="set-row-top">
+              <span className="set-index-badge">{index + 1}</span>
+              <select
+                className="type-select"
+                defaultValue={set.type}
+                onChange={(e) => updateSet.mutate({ setId: set.id, patch: { type: e.target.value } })}
+              >
+                <option value="warmup">Warm-up</option>
+                <option value="working">Working</option>
+                <option value="backoff">Backoff</option>
+                <option value="dropset">Dropset</option>
+                <option value="failure">Failure</option>
+                <option value="other">Other</option>
+              </select>
+              <div className="set-row-icon-actions">
+                <button className="icon-button" onClick={() => deleteSet.mutate(set.id)} aria-label="Remove set">
+                  ✕
+                </button>
+              </div>
+            </div>
+            <div className="plan-set-grid">
+              <input
+                className="text-input text-input-sm"
+                type="number"
+                placeholder="Reps min"
+                defaultValue={set.targetRepsMin ?? ''}
+                onBlur={(e) =>
+                  updateSet.mutate({ setId: set.id, patch: { targetRepsMin: e.target.value === '' ? null : Number(e.target.value) } })
+                }
+              />
+              <input
+                className="text-input text-input-sm"
+                type="number"
+                placeholder="Reps max"
+                defaultValue={set.targetRepsMax ?? ''}
+                onBlur={(e) =>
+                  updateSet.mutate({ setId: set.id, patch: { targetRepsMax: e.target.value === '' ? null : Number(e.target.value) } })
+                }
+              />
+              <input
+                className="text-input text-input-sm"
+                type="number"
+                placeholder="kg"
+                defaultValue={set.targetWeight ?? ''}
+                onBlur={(e) =>
+                  updateSet.mutate({ setId: set.id, patch: { targetWeight: e.target.value === '' ? null : Number(e.target.value) } })
+                }
+              />
+            </div>
           </li>
         ))}
       </ul>

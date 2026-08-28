@@ -12,9 +12,15 @@ export function More() {
             <span className="exercise-list-meta">Create, edit, activate and duplicate plans</span>
           </Link>
         </li>
+        <li>
+          <Link to="/body-weight" className="exercise-list-item">
+            <span className="exercise-list-name">Body weight</span>
+            <span className="exercise-list-meta">Log and review your body weight over time</span>
+          </Link>
+        </li>
       </ul>
 
-      <p className="page-subtitle">Body weight, JSON import/export and settings land in later phases.</p>
+      <p className="page-subtitle">Settings land in a later phase.</p>
     </div>
   );
 }

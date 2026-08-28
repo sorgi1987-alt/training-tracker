@@ -106,6 +106,9 @@ function toSessionExerciseDTO(row, sets, actualInfo, plannedInfo, previousPerfor
     substituted: isTrue(row.substituted),
     skipped: isTrue(row.skipped),
     notes: row.notes || null,
+    // Snapshot from the plan at session-start time (spec section 2) — the
+    // rest timer's default duration, independent of later plan edits.
+    restSeconds: numOrNull(row.rest_seconds),
     previousPerformance: previousPerformance || [],
     sets: sets || []
   };
@@ -124,7 +127,12 @@ function toSessionSetDTO(row) {
     distance: numOrNull(row.distance),
     completed: isTrue(row.completed),
     skipped: isTrue(row.skipped),
-    notes: row.notes || null
+    notes: row.notes || null,
+    // Snapshot of the planned target range (spec section 16) — advisory
+    // progression suggestions compare actual reps against this, never
+    // against the plan's current (possibly since-edited) targets.
+    targetRepsMin: numOrNull(row.target_reps_min),
+    targetRepsMax: numOrNull(row.target_reps_max)
   };
 }
 
@@ -245,7 +253,8 @@ router.post('/', async (req, res, next) => {
             actual_order: index,
             substituted: false,
             skipped: false,
-            notes: ''
+            notes: '',
+            rest_seconds: numOrNull(planExercise.rest_seconds)
           })
         );
 
@@ -261,7 +270,9 @@ router.post('/', async (req, res, next) => {
                 weight: previous?.[setIndex]?.weight ?? numOrNull(planSet.target_weight),
                 completed: false,
                 skipped: false,
-                notes: ''
+                notes: '',
+                target_reps_min: numOrNull(planSet.target_reps_min),
+                target_reps_max: numOrNull(planSet.target_reps_max)
               })
             )
           );
@@ -372,7 +383,8 @@ router.post('/:sessionId/exercises', async (req, res, next) => {
         actual_order: siblings.length,
         substituted: false,
         skipped: false,
-        notes: req.body?.notes || ''
+        notes: req.body?.notes || '',
+        rest_seconds: req.body?.restSeconds ?? null
       })
     );
 
@@ -390,6 +402,7 @@ router.patch('/:sessionId/exercises/:sessionExerciseId', async (req, res, next) 
 
     if (req.body?.notes !== undefined) patch.notes = req.body.notes;
     if (req.body?.skipped !== undefined) patch.skipped = Boolean(req.body.skipped);
+    if (req.body?.restSeconds !== undefined) patch.rest_seconds = req.body.restSeconds;
     if (req.body?.exerciseId !== undefined) {
       assertRowId(req.body.exerciseId, 'exerciseId');
       const exerciseRow = await catalystApp.datastore().table('Exercise').getRow(req.body.exerciseId).catch(() => null);

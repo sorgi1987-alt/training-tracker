@@ -39,39 +39,40 @@ export function Home() {
       <p className="page-subtitle">Signed in</p>
 
       {activeSession && (
-        <section className="card">
-          <h2 className="card-title">Workout in progress</h2>
-          <p>
-            <strong>{activeSession.name}</strong>
-            <br />
-            <Link to="/workout">Resume workout</Link>
-          </p>
+        <section className="cta-card">
+          <span className="cta-card-eyebrow">Workout in progress</span>
+          <h2 className="cta-card-title">{activeSession.name}</h2>
+          <Link className="button-primary button-large" to="/workout">
+            Resume workout
+          </Link>
         </section>
       )}
 
-      <section className="card">
-        <h2 className="card-title">Active plan</h2>
-        {plans.isLoading && <p>Loading…</p>}
-        {!plans.isLoading && !activePlan && (
-          <p>
-            No active plan. <Link to="/plans">Choose or create one</Link>.
-          </p>
-        )}
-        {activePlan && (
-          <p>
-            <strong>{activePlan.name}</strong>
-            {weekLabel(activePlan)}
-            <br />
-            <Link to={`/plans/${activePlan.id}`}>View plan</Link>
-            {!activeSession && (
-              <>
-                {' · '}
-                <Link to="/workout">Start Workout</Link>
-              </>
-            )}
-          </p>
-        )}
-      </section>
+      {!activeSession && activePlan && (
+        <section className="cta-card">
+          <span className="cta-card-eyebrow">Active plan</span>
+          <h2 className="cta-card-title">{activePlan.name}</h2>
+          <p className="cta-card-meta">{weekLabel(activePlan) || 'Ready when you are'}</p>
+          <Link className="button-primary button-large" to="/workout">
+            Start Workout
+          </Link>
+          <Link className="cta-card-link" to={`/plans/${activePlan.id}`}>
+            View plan
+          </Link>
+        </section>
+      )}
+
+      {!activeSession && !activePlan && (
+        <section className="card">
+          <h2 className="card-title">Active plan</h2>
+          {plans.isLoading && <p>Loading…</p>}
+          {!plans.isLoading && (
+            <p>
+              No active plan. <Link to="/plans">Choose or create one</Link>.
+            </p>
+          )}
+        </section>
+      )}
 
       <section className="card">
         <h2 className="card-title">Foundation check</h2>

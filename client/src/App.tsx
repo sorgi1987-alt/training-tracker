@@ -15,6 +15,7 @@ import { Workout } from './pages/Workout';
 import { History } from './pages/History';
 import { SessionDetail } from './pages/SessionDetail';
 import { More } from './pages/More';
+import { BodyWeight } from './pages/BodyWeight';
 
 export function App() {
   return (
@@ -35,6 +36,7 @@ export function App() {
           <Route path="/plans/:id" element={<PlanDetail />} />
           <Route path="/plans/:planId/workouts/:workoutId" element={<WorkoutDetail />} />
           <Route path="/more" element={<More />} />
+          <Route path="/body-weight" element={<BodyWeight />} />
         </Route>
       </Route>
     </Routes>

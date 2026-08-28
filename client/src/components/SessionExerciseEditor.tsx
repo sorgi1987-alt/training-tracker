@@ -2,8 +2,20 @@ import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiFetch } from '../lib/apiClient';
 import { useDebouncedValue } from '../lib/useDebouncedValue';
-import type { SessionExercise } from '../types/session';
+import { recordPendingSetPatch, clearPendingSetPatch } from '../lib/offlineDraft';
+import { Stepper } from './Stepper';
+import { CheckIcon } from './icons';
+import type { SessionExercise, SessionSet } from '../types/session';
 import type { Exercise } from '../types/exercise';
+
+const SET_TYPE_LABELS: Record<string, string> = {
+  warmup: 'Warm-up',
+  working: 'Working',
+  backoff: 'Backoff',
+  dropset: 'Dropset',
+  failure: 'Failure',
+  other: 'Other'
+};
 
 // Shared between the active workout screen and a historical session's edit
 // view — spec section 9 requires completed sessions to stay just as
@@ -15,12 +27,17 @@ export function SessionExerciseEditor({
   sessionId,
   exercise,
   onChanged,
-  allowSubstitute = true
+  allowSubstitute = true,
+  onSetCompleted
 }: {
   sessionId: string;
   exercise: SessionExercise;
   onChanged: () => void;
   allowSubstitute?: boolean;
+  // Only passed by the active workout screen — starts the rest timer.
+  // History editing (SessionDetail) omits this; correcting a past set
+  // shouldn't kick off a rest countdown.
+  onSetCompleted?: (restSeconds: number) => void;
 }) {
   const [showSubstitute, setShowSubstitute] = useState(false);
   const basePath = `/sessions/${sessionId}/exercises/${exercise.id}`;
@@ -31,9 +48,17 @@ export function SessionExerciseEditor({
   });
 
   const updateSet = useMutation({
-    mutationFn: ({ setId, patch }: { setId: string; patch: Record<string, unknown> }) =>
-      apiFetch(`${basePath}/sets/${setId}`, { method: 'PATCH', body: JSON.stringify(patch) }),
-    onSuccess: onChanged
+    // Record the intended value before attempting the network call — if it
+    // fails (offline), the draft survives a refresh; if it succeeds, it's
+    // cleared immediately below (spec section 20).
+    mutationFn: ({ setId, patch }: { setId: string; patch: Record<string, unknown> }) => {
+      recordPendingSetPatch(sessionId, exercise.id, setId, patch);
+      return apiFetch(`${basePath}/sets/${setId}`, { method: 'PATCH', body: JSON.stringify(patch) });
+    },
+    onSuccess: (_data, { setId }) => {
+      clearPendingSetPatch(sessionId, setId);
+      onChanged();
+    }
   });
 
   const deleteSet = useMutation({
@@ -49,12 +74,26 @@ export function SessionExerciseEditor({
     }
   });
 
+  const doneCount = exercise.sets.filter((s) => s.completed).length;
+
   return (
-    <li className={`card${exercise.skipped ? ' is-skipped' : ''}`}>
-      <div className="reorderable-row-main-static">
-        <span className="exercise-list-name">{exercise.actualExerciseName ?? 'Unknown exercise'}</span>
-        {exercise.substituted && exercise.plannedExerciseName && (
-          <span className="exercise-list-meta">Substituted for {exercise.plannedExerciseName}</span>
+    <li className={`exercise-card${exercise.skipped ? ' is-skipped' : ''}`}>
+      <div className="exercise-card-header">
+        <div className="reorderable-row-main-static">
+          <span className="exercise-list-name">{exercise.actualExerciseName ?? 'Unknown exercise'}</span>
+          {exercise.substituted && exercise.plannedExerciseName && (
+            <span className="exercise-list-meta">Substituted for {exercise.plannedExerciseName}</span>
+          )}
+        </div>
+        {exercise.sets.length > 0 && (
+          <div className="set-progress-dots" aria-label={`${doneCount} of ${exercise.sets.length} sets logged`}>
+            {exercise.sets.map((set) => (
+              <span
+                key={set.id}
+                className={`set-dot${set.completed ? ' is-done' : ''}${set.skipped ? ' is-skipped' : ''}`}
+              />
+            ))}
+          </div>
         )}
       </div>
 
@@ -64,42 +103,16 @@ export function SessionExerciseEditor({
         </p>
       )}
 
-      <ul className="plain-list">
+      <ul className="set-list">
         {exercise.sets.map((set, index) => (
-          <li key={set.id} className={`set-row${set.skipped ? ' is-skipped' : ''}`}>
-            <span className="set-row-index">{index + 1}</span>
-            <input
-              className="set-input"
-              type="number"
-              placeholder="kg"
-              defaultValue={set.weight ?? ''}
-              onBlur={(e) => updateSet.mutate({ setId: set.id, patch: { weight: e.target.value === '' ? null : Number(e.target.value) } })}
-            />
-            <input
-              className="set-input"
-              type="number"
-              placeholder="reps"
-              defaultValue={set.reps ?? ''}
-              onBlur={(e) => updateSet.mutate({ setId: set.id, patch: { reps: e.target.value === '' ? null : Number(e.target.value) } })}
-            />
-            <label className="set-complete">
-              <input
-                type="checkbox"
-                checked={set.completed}
-                onChange={(e) => updateSet.mutate({ setId: set.id, patch: { completed: e.target.checked } })}
-              />
-            </label>
-            <button
-              className="icon-button"
-              onClick={() => updateSet.mutate({ setId: set.id, patch: { skipped: !set.skipped } })}
-              aria-label="Toggle skip set"
-            >
-              ⤫
-            </button>
-            <button className="icon-button" onClick={() => deleteSet.mutate(set.id)} aria-label="Remove set">
-              ✕
-            </button>
-          </li>
+          <SetRow
+            key={set.id}
+            set={set}
+            index={index}
+            onUpdate={(patch) => updateSet.mutate({ setId: set.id, patch })}
+            onDelete={() => deleteSet.mutate(set.id)}
+            onCompleted={() => onSetCompleted?.(exercise.restSeconds ?? 90)}
+          />
         ))}
       </ul>
 
@@ -118,6 +131,83 @@ export function SessionExerciseEditor({
       </div>
 
       {showSubstitute && <SubstitutePicker onPick={(exerciseId) => patchExercise.mutate({ exerciseId })} />}
+    </li>
+  );
+}
+
+function SetRow({
+  set,
+  index,
+  onUpdate,
+  onDelete,
+  onCompleted
+}: {
+  set: SessionSet;
+  index: number;
+  onUpdate: (patch: Record<string, unknown>) => void;
+  onDelete: () => void;
+  onCompleted: () => void;
+}) {
+  const [weight, setWeight] = useState(set.weight);
+  const [reps, setReps] = useState(set.reps);
+
+  const hitTarget = set.completed && set.targetRepsMax !== null && (set.reps ?? -Infinity) >= set.targetRepsMax;
+
+  function toggleComplete() {
+    const next = !set.completed;
+    onUpdate({ completed: next });
+    if (next) onCompleted();
+  }
+
+  return (
+    <li className={`set-row set-row-${set.type}${set.completed ? ' is-complete' : ''}${set.skipped ? ' is-skipped' : ''}`}>
+      <div className="set-row-top">
+        <span className="set-index-badge">{index + 1}</span>
+        <span className={`set-type-chip set-type-chip-${set.type}`}>{SET_TYPE_LABELS[set.type] ?? set.type}</span>
+        {hitTarget && (
+          <span className="progression-badge" title="Hit the top of the target rep range">
+            🔼 add weight next time
+          </span>
+        )}
+        <div className="set-row-icon-actions">
+          <button className="icon-button" onClick={() => onUpdate({ skipped: !set.skipped })} aria-label="Toggle skip set">
+            ⤫
+          </button>
+          <button className="icon-button" onClick={onDelete} aria-label="Remove set">
+            ✕
+          </button>
+        </div>
+      </div>
+
+      <div className="set-row-body">
+        <Stepper
+          value={weight}
+          onChange={setWeight}
+          onCommit={(value) => onUpdate({ weight: value })}
+          step={2.5}
+          suffix="kg"
+          placeholder="0"
+          ariaLabel={`Set ${index + 1} weight`}
+        />
+        <Stepper
+          value={reps}
+          onChange={setReps}
+          onCommit={(value) => onUpdate({ reps: value })}
+          step={1}
+          suffix="reps"
+          placeholder="0"
+          ariaLabel={`Set ${index + 1} reps`}
+        />
+        <button
+          type="button"
+          className={`set-complete-toggle${set.completed ? ' is-complete' : ''}`}
+          onClick={toggleComplete}
+          aria-pressed={set.completed}
+          aria-label={set.completed ? 'Mark set incomplete' : 'Mark set complete'}
+        >
+          <CheckIcon className="set-complete-icon" />
+        </button>
+      </div>
     </li>
   );
 }

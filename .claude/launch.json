@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "catalyst-serve",
+      "runtimeExecutable": "catalyst",
+      "runtimeArgs": ["serve"],
+      "port": 3000
+    }
+  ]
+}

@@ -5,7 +5,7 @@ const healthRouter = require('./routes/health');
 const exercisesRouter = require('./routes/exercises');
 const plansRouter = require('./routes/plans');
 const sessionsRouter = require('./routes/sessions');
-const { notImplementedRouter } = require('./routes/notImplemented');
+const measurementsRouter = require('./routes/measurements');
 
 const app = express();
 app.use(express.json());
@@ -14,7 +14,7 @@ app.use(healthRouter);
 app.use('/plans', plansRouter);
 app.use('/exercises', exercisesRouter);
 app.use('/sessions', sessionsRouter);
-app.use('/measurements', notImplementedRouter('measurements'));
+app.use('/measurements', measurementsRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
