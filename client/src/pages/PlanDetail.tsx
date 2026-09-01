@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '../lib/apiClient';
+import { ChevronRightIcon } from '../components/icons';
 import type { Plan, PlanWorkout } from '../types/plan';
 
 function reordered<T>(items: T[], fromIndex: number, toIndex: number): T[] {
@@ -86,14 +87,15 @@ export function PlanDetail() {
       <Link to="/plans" className="back-link">
         ‹ Plans
       </Link>
-      <h1 className="page-title">{plan.name}</h1>
-      <p className="page-subtitle">
-        <span className={`status-badge status-${plan.status}`}>{plan.status}</span>
-        {' · '}
-        {plan.durationWeeks} weeks
-        {plan.startDate && ` · starts ${plan.startDate}`}
-      </p>
-      {plan.description && <p>{plan.description}</p>}
+      <div className="detail-header">
+        <h1 className="page-title">{plan.name}</h1>
+        <div className="detail-chips">
+          <span className={`status-badge status-${plan.status}`}>{plan.status}</span>
+          <span className="meta-chip">{plan.durationWeeks} weeks</span>
+          {plan.startDate && <span className="meta-chip">starts {plan.startDate}</span>}
+        </div>
+      </div>
+      {plan.description && <p className="page-subtitle">{plan.description}</p>}
 
       <div className="action-row">
         {plan.status !== 'active' && (
@@ -202,6 +204,7 @@ function WorkoutRow({
         <span className="exercise-list-name">{workout.name}</span>
         <span className="exercise-list-meta">{workout.exercises.length} exercises</span>
       </Link>
+      <ChevronRightIcon className="list-row-chevron" />
       <div className="reorderable-row-controls">
         <button className="icon-button" onClick={onMoveUp} disabled={isFirst} aria-label="Move up">
           ↑

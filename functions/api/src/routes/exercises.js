@@ -40,6 +40,74 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+// Dashboard "top lifts" snapshot: current best estimated 1RM for whichever
+// exercises this user has actually performed most, picked automatically by
+// frequency rather than requiring the user to configure "favorite lifts."
+router.get('/top-lifts', async (req, res, next) => {
+  try {
+    const catalystApp = req.catalystApp;
+    const userId = assertRowId(req.currentUser.userId, 'userId');
+    const limit = Math.min(parseInt(req.query.limit, 10) || 3, 10);
+
+    const sessionExercises = await zcqlSelect(
+      catalystApp,
+      'SessionExercise',
+      `SELECT ROWID, actual_exercise_id FROM SessionExercise WHERE user_id = '${userId}'`
+    );
+
+    const sessionExerciseIdsByExercise = new Map();
+    for (const row of sessionExercises) {
+      const exerciseId = row.actual_exercise_id;
+      if (!exerciseId) continue;
+      if (!sessionExerciseIdsByExercise.has(exerciseId)) sessionExerciseIdsByExercise.set(exerciseId, []);
+      sessionExerciseIdsByExercise.get(exerciseId).push(row.ROWID);
+    }
+
+    const topExerciseIds = [...sessionExerciseIdsByExercise.entries()]
+      .sort((a, b) => b[1].length - a[1].length)
+      .slice(0, limit)
+      .map(([exerciseId]) => exerciseId);
+
+    const topLifts = [];
+    for (const exerciseId of topExerciseIds) {
+      const exerciseRow = await catalystApp.datastore().table('Exercise').getRow(exerciseId).catch(() => null);
+      if (!exerciseRow || !isActiveRow(exerciseRow)) continue;
+
+      const seRowIds = sessionExerciseIdsByExercise.get(exerciseId);
+      const idList = seRowIds.map((id) => `'${id}'`).join(',');
+      const sets = await zcqlSelect(
+        catalystApp,
+        'SessionSet',
+        `SELECT weight, reps, completed, skipped FROM SessionSet WHERE session_exercise_id IN (${idList})`
+      );
+
+      let bestEstimated1RM = null;
+      for (const set of sets) {
+        if (!isTrue(set.completed) || isTrue(set.skipped)) continue;
+        const weight = numOrNull(set.weight);
+        const reps = numOrNull(set.reps);
+        if (weight == null || reps == null) continue;
+        // Epley formula (same as exercise-detail PRs, spec section 15).
+        const estimated1RM = Math.round(weight * (1 + reps / 30) * 10) / 10;
+        if (bestEstimated1RM === null || estimated1RM > bestEstimated1RM) bestEstimated1RM = estimated1RM;
+      }
+
+      if (bestEstimated1RM !== null) {
+        topLifts.push({
+          exerciseId,
+          exerciseName: exerciseRow.name,
+          timesPerformed: seRowIds.length,
+          bestEstimated1RM
+        });
+      }
+    }
+
+    res.json({ topLifts });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/:id', async (req, res, next) => {
   try {
     const catalystApp = req.catalystApp;
@@ -75,6 +143,7 @@ router.get('/:id/history', async (req, res, next) => {
     sessionExercises.sort((a, b) => (b.CREATEDTIME || '').localeCompare(a.CREATEDTIME || ''));
 
     const history = [];
+    const trendDescending = [];
     let highestWeight = null;
     let repsAtHighestWeight = null;
     let bestEstimated1RM = null;
@@ -91,6 +160,7 @@ router.get('/:id/history', async (req, res, next) => {
       if (performedSets.length === 0) continue;
 
       let sessionVolume = 0;
+      let sessionBestEstimated1RM = null;
       for (const set of performedSets) {
         if (set.weight == null || set.reps == null) continue;
         sessionVolume += set.weight * set.reps;
@@ -107,6 +177,9 @@ router.get('/:id/history', async (req, res, next) => {
         if (bestEstimated1RM === null || estimated1RM > bestEstimated1RM) {
           bestEstimated1RM = estimated1RM;
         }
+        if (sessionBestEstimated1RM === null || estimated1RM > sessionBestEstimated1RM) {
+          sessionBestEstimated1RM = estimated1RM;
+        }
       }
 
       if (sessionVolume > 0 && (highestSessionVolume === null || sessionVolume > highestSessionVolume)) {
@@ -116,10 +189,21 @@ router.get('/:id/history', async (req, res, next) => {
       if (index < 10) {
         history.push({ sessionId: session.ROWID, date: toIsoOrNull(session.started_time), sets: performedSets });
       }
+
+      // Chart-friendly trend series (section 15's PRs summarize the whole
+      // history; this is a lighter per-session slice just for plotting).
+      if (trendDescending.length < 20 && sessionBestEstimated1RM !== null) {
+        trendDescending.push({
+          date: toIsoOrNull(session.started_time),
+          estimated1RM: sessionBestEstimated1RM,
+          volume: Math.round(sessionVolume * 10) / 10
+        });
+      }
     }
 
     res.json({
       history,
+      trend: trendDescending.reverse(),
       personalRecords: {
         highestWeight,
         repsAtHighestWeight,

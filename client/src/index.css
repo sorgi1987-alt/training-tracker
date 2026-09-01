@@ -160,9 +160,19 @@ button {
 }
 
 .card-title {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   font-size: 1rem;
   font-weight: 700;
   margin: 0 0 0.6rem;
+}
+
+.card-title-icon {
+  width: 1.1rem;
+  height: 1.1rem;
+  color: var(--color-primary);
+  flex-shrink: 0;
 }
 
 .screen-loading {
@@ -180,12 +190,24 @@ button {
   justify-content: center;
   min-height: 100vh;
   padding: 1.5rem;
-  gap: 1rem;
+  gap: 1.5rem;
+  background: linear-gradient(160deg, var(--color-primary) 0%, var(--color-bg) 55%);
 }
 
 .login-title {
-  font-size: 1.5rem;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #fff;
   margin: 0;
+  letter-spacing: -0.01em;
+}
+
+#catalyst-login {
+  width: 100%;
+  max-width: 360px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
 }
 
 .text-input {
@@ -497,8 +519,11 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.6rem 0;
-  border-bottom: 1px solid var(--color-border);
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
 }
 
 .reorderable-row-main {
@@ -666,6 +691,17 @@ button {
 
 .set-row-warmup {
   border-left-color: var(--color-warmup);
+  /* Warm-up sets matter less than working sets — recede them visually so
+     attention lands on what's actually being worked toward. */
+  opacity: 0.62;
+}
+
+.set-target-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .set-row-working {
@@ -696,6 +732,8 @@ button {
 .set-row-top {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  row-gap: 0.25rem;
   gap: 0.4rem;
   margin-bottom: 0.45rem;
 }
@@ -1089,6 +1127,285 @@ button {
 .sync-pending {
   background: #dbeafe;
   color: #1e40af;
+}
+
+/* ---------- Trend chart (body weight / exercise 1RM) ---------- */
+
+.trend-chart-svg {
+  width: 100%;
+  aspect-ratio: 300 / 120;
+  display: block;
+  overflow: visible;
+}
+
+.trend-chart-area {
+  opacity: 0.14;
+}
+
+.trend-chart-line {
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.trend-chart-dot {
+  stroke: var(--color-surface);
+  stroke-width: 1.5;
+}
+
+.trend-chart-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 0.5rem;
+}
+
+.trend-chart-date {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.trend-chart-current {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.trend-chart-empty {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+/* ---------- Home dashboard: stats + top lifts ---------- */
+
+.stat-row {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.stat-card {
+  flex: 1;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 1rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 1.9rem;
+  font-weight: 800;
+  color: var(--color-primary);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.stat-label {
+  font-size: 0.76rem;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.top-lifts-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.top-lift-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-alt);
+  text-decoration: none;
+  color: var(--color-text);
+  transition: background 120ms var(--ease-standard);
+}
+
+.top-lift-row:active {
+  background: var(--color-border);
+}
+
+.top-lift-name {
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.top-lift-value {
+  font-weight: 700;
+  color: var(--color-primary);
+  font-size: 0.92rem;
+  white-space: nowrap;
+}
+
+.top-lift-value small {
+  font-weight: 600;
+  color: var(--color-text-muted);
+  font-size: 0.68rem;
+  margin-left: 0.15rem;
+}
+
+/* ---------- Grouped list rows (Exercises / Plans / History / More) ---------- */
+
+.list-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 1rem;
+}
+
+.list-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  text-decoration: none;
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  transition: background 120ms var(--ease-standard);
+}
+
+.list-rows li:last-child .list-row {
+  border-bottom: none;
+}
+
+.list-row:active {
+  background: var(--color-surface-alt);
+}
+
+.list-row-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
+.list-row-icon {
+  width: 1.3rem;
+  height: 1.3rem;
+}
+
+.list-row-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.list-row-title {
+  font-weight: 700;
+  font-size: 0.98rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.list-row-meta {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.list-row-chevron {
+  width: 1.15rem;
+  height: 1.15rem;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05rem 0.5rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-alt);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.body-weight-value {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.empty-state {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: var(--color-text-muted);
+}
+
+/* ---------- Detail page header ---------- */
+
+.detail-header {
+  margin-bottom: 1rem;
+}
+
+.detail-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.35rem 0 0;
+}
+
+.video-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.1rem;
+  border-radius: var(--radius-pill);
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-decoration: none;
+  margin: 0.75rem 0 1rem;
+  transition: transform 120ms var(--ease-tactile);
+}
+
+.video-link:active {
+  transform: scale(0.97);
+}
+
+.video-link-icon {
+  width: 1.1rem;
+  height: 1.1rem;
 }
 
 /* ---------- Plan set editing (WorkoutDetail) ---------- */

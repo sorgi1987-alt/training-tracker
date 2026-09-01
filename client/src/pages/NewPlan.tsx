@@ -38,7 +38,7 @@ export function NewPlan() {
       <h1 className="page-title">New training plan</h1>
 
       <form
-        className="form"
+        className="card form"
         onSubmit={(e) => {
           e.preventDefault();
           mutation.mutate();

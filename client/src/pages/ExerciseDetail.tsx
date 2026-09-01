@@ -1,12 +1,32 @@
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '../lib/apiClient';
+import { TrendChart } from '../components/TrendChart';
+import { PlayIcon } from '../components/icons';
 import type { Exercise } from '../types/exercise';
+
+function formatLabel(value: string): string {
+  return value.replace(/_/g, ' ');
+}
+
+// No YouTube API key/credentials are wired up, so rather than fabricate a
+// specific video link (which could easily be wrong or dead), this links out
+// to a live YouTube search for the exercise — always resolves to real,
+// current results.
+function youtubeSearchUrl(exerciseName: string): string {
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(`${exerciseName} exercise proper form tutorial`)}`;
+}
 
 interface ExerciseHistoryEntry {
   sessionId: string;
   date: string;
   sets: { weight: number | null; reps: number | null; type: string }[];
+}
+
+interface ExerciseTrendPoint {
+  date: string;
+  estimated1RM: number;
+  volume: number;
 }
 
 interface PersonalRecords {
@@ -27,7 +47,10 @@ export function ExerciseDetail() {
 
   const history = useQuery({
     queryKey: ['exercise-history', id],
-    queryFn: () => apiFetch<{ history: ExerciseHistoryEntry[]; personalRecords: PersonalRecords }>(`/exercises/${id}/history`),
+    queryFn: () =>
+      apiFetch<{ history: ExerciseHistoryEntry[]; trend: ExerciseTrendPoint[]; personalRecords: PersonalRecords }>(
+        `/exercises/${id}/history`
+      ),
     enabled: Boolean(id)
   });
 
@@ -43,22 +66,47 @@ export function ExerciseDetail() {
       <Link to="/exercises" className="back-link">
         ‹ Exercises
       </Link>
-      <h1 className="page-title">{exercise.name}</h1>
-      <p className="page-subtitle">
-        {[exercise.primaryMuscle, exercise.equipment, exercise.category].filter(Boolean).join(' · ')}
-      </p>
+      <div className="detail-header">
+        <h1 className="page-title">{exercise.name}</h1>
+        <div className="detail-chips">
+          {exercise.primaryMuscle && <span className="meta-chip">{formatLabel(exercise.primaryMuscle)}</span>}
+          {exercise.equipment && <span className="meta-chip">{formatLabel(exercise.equipment)}</span>}
+          {exercise.category && <span className="meta-chip">{formatLabel(exercise.category)}</span>}
+        </div>
+      </div>
+
+      <a className="video-link" href={youtubeSearchUrl(exercise.name)} target="_blank" rel="noopener noreferrer">
+        <PlayIcon className="video-link-icon" />
+        Watch tutorials on YouTube
+      </a>
 
       {exercise.secondaryMuscles.length > 0 && (
         <section className="card">
           <h2 className="card-title">Also works</h2>
-          <p>{exercise.secondaryMuscles.join(', ')}</p>
+          <div className="detail-chips">
+            {exercise.secondaryMuscles.map((muscle) => (
+              <span className="meta-chip" key={muscle}>
+                {formatLabel(muscle)}
+              </span>
+            ))}
+          </div>
         </section>
       )}
 
       {exercise.instructions && (
         <section className="card">
-          <h2 className="card-title">Instructions</h2>
+          <h2 className="card-title">How to perform it</h2>
           <p>{exercise.instructions}</p>
+        </section>
+      )}
+
+      {history.data && history.data.trend.length > 1 && (
+        <section className="card">
+          <h2 className="card-title">Estimated 1RM trend</h2>
+          <TrendChart
+            points={history.data.trend.map((point) => ({ date: point.date, value: point.estimated1RM }))}
+            unit=" kg"
+          />
         </section>
       )}
 

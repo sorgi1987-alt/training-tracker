@@ -36,13 +36,16 @@ export function SessionDetail() {
       <Link to="/history" className="back-link">
         ‹ History
       </Link>
-      <h1 className="page-title">{session.name}</h1>
-      <p className="page-subtitle">
-        <span className={`status-badge status-${session.status}`}>{session.status.replace('_', ' ')}</span>
-        {' · '}
-        {new Date(session.startedTime).toLocaleString()}
-        {session.durationSeconds != null && ` · ${Math.round(session.durationSeconds / 60)} min`}
-      </p>
+      <div className="detail-header">
+        <h1 className="page-title">{session.name}</h1>
+        <div className="detail-chips">
+          <span className={`status-badge status-${session.status}`}>{session.status.replace('_', ' ')}</span>
+          <span className="meta-chip">{new Date(session.startedTime).toLocaleString()}</span>
+          {session.durationSeconds != null && (
+            <span className="meta-chip">{Math.round(session.durationSeconds / 60)} min</span>
+          )}
+        </div>
+      </div>
 
       <ul className="plain-list">
         {exercises.map((exercise) => (

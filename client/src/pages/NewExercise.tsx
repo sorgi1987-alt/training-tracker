@@ -40,7 +40,7 @@ export function NewExercise() {
       <h1 className="page-title">Add custom exercise</h1>
 
       <form
-        className="form"
+        className="card form"
         onSubmit={(e) => {
           e.preventDefault();
           setDuplicate(null);

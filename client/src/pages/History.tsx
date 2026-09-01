@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '../lib/apiClient';
+import { HistoryIcon, ChevronRightIcon } from '../components/icons';
 import type { Plan } from '../types/plan';
 import type { SessionStatus, WorkoutSession } from '../types/session';
 
@@ -51,24 +52,33 @@ export function History() {
 
       {sessionsQuery.isLoading && <p className="page-subtitle">Loading…</p>}
       {sessionsQuery.data && sessionsQuery.data.sessions.length === 0 && (
-        <p className="page-subtitle">No sessions match these filters.</p>
+        <p className="empty-state">No sessions match these filters.</p>
       )}
 
-      <ul className="plain-list">
-        {sessionsQuery.data?.sessions.map((session) => (
-          <li key={session.id}>
-            <Link to={`/history/${session.id}`} className="reorderable-row-main history-session-row">
-              <span className="exercise-list-name">{session.name}</span>
-              <span className="exercise-list-meta">
-                <span className={`status-badge status-${session.status}`}>{session.status.replace('_', ' ')}</span>
-                {' · '}
-                {new Date(session.startedTime).toLocaleDateString()}
-                {session.durationSeconds != null && ` · ${Math.round(session.durationSeconds / 60)} min`}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
+      {sessionsQuery.data && sessionsQuery.data.sessions.length > 0 && (
+        <div className="list-card">
+          <ul className="list-rows">
+            {sessionsQuery.data.sessions.map((session) => (
+              <li key={session.id}>
+                <Link to={`/history/${session.id}`} className="list-row">
+                  <span className="list-row-icon-wrap">
+                    <HistoryIcon className="list-row-icon" />
+                  </span>
+                  <span className="list-row-body">
+                    <span className="list-row-title">{session.name}</span>
+                    <span className="list-row-meta">
+                      <span className={`status-badge status-${session.status}`}>{session.status.replace('_', ' ')}</span>
+                      <span>{new Date(session.startedTime).toLocaleDateString()}</span>
+                      {session.durationSeconds != null && <span>{Math.round(session.durationSeconds / 60)} min</span>}
+                    </span>
+                  </span>
+                  <ChevronRightIcon className="list-row-chevron" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

@@ -260,7 +260,12 @@ router.post('/', async (req, res, next) => {
 
         const planSets = await fetchWhere(catalystApp, 'PlanSet', 'plan_exercise_id', planExercise.ROWID);
         if (planSets.length) {
-          const previous = await getPreviousPerformance(catalystApp, currentUser.userId, planExercise.exercise_id, null);
+          // Exclude the SessionExercise row we just inserted above — it
+          // already exists in the table by this point (with no sets yet),
+          // so without excluding it here it would win as its own "previous
+          // performance" and this would always fall back to the plan's
+          // target weight instead of what was actually lifted last time.
+          const previous = await getPreviousPerformance(catalystApp, currentUser.userId, planExercise.exercise_id, sessionExercise.ROWID);
           await sessionSetTable.insertRows(
             planSets.map((planSet, setIndex) =>
               compact({
@@ -268,6 +273,16 @@ router.post('/', async (req, res, next) => {
                 order_index: setIndex,
                 set_type: planSet.set_type,
                 weight: previous?.[setIndex]?.weight ?? numOrNull(planSet.target_weight),
+                // Same idea as weight: default to what was actually done
+                // last time, and only fall back to the plan's target reps
+                // for an exercise with no history yet. Still just a
+                // starting point — completing the set is what makes it
+                // real (spec: never invent history, always editable).
+                reps:
+                  previous?.[setIndex]?.reps ??
+                  numOrNull(planSet.target_reps) ??
+                  numOrNull(planSet.target_reps_max) ??
+                  numOrNull(planSet.target_reps_min),
                 completed: false,
                 skipped: false,
                 notes: '',
@@ -281,6 +296,67 @@ router.post('/', async (req, res, next) => {
     }
 
     res.status(201).json({ session: await loadSessionTree(catalystApp, session, currentUser.userId) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Madrid-calendar-day key ('YYYY-MM-DD') for an instant — bucketing sessions
+// by the trainee's actual local day/week/month, not the server's UTC one.
+function madridDateKey(date) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(date);
+}
+
+function mondayOfWeekKey(dateKey) {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  const anchor = new Date(Date.UTC(y, m - 1, d));
+  const daysSinceMonday = (anchor.getUTCDay() + 6) % 7;
+  anchor.setUTCDate(anchor.getUTCDate() - daysSinceMonday);
+  return anchor.toISOString().slice(0, 10);
+}
+
+function shiftWeekKey(weekKey, deltaWeeks) {
+  const [y, m, d] = weekKey.split('-').map(Number);
+  const anchor = new Date(Date.UTC(y, m - 1, d));
+  anchor.setUTCDate(anchor.getUTCDate() + deltaWeeks * 7);
+  return anchor.toISOString().slice(0, 10);
+}
+
+// Dashboard summary: how many workouts this calendar month, and the current
+// streak of consecutive weeks with at least one completed workout. Kept
+// deliberately simple (spec section 43: don't overbuild) — no goal-setting,
+// no historical streak records, just "how am I doing right now."
+router.get('/stats', async (req, res, next) => {
+  try {
+    const userId = assertRowId(req.currentUser.userId, 'userId');
+    const query = `SELECT started_time FROM WorkoutSession WHERE user_id = '${userId}' AND status = 'completed'`;
+    const rows = await zcqlSelect(req.catalystApp, 'WorkoutSession', query);
+
+    const now = new Date();
+    const currentMonthKey = madridDateKey(now).slice(0, 7);
+    const weekKeys = new Set();
+    let completedThisMonth = 0;
+
+    for (const row of rows) {
+      const started = fromCatalystDateTime(row.started_time);
+      if (Number.isNaN(started.getTime())) continue;
+      const dayKey = madridDateKey(started);
+      if (dayKey.slice(0, 7) === currentMonthKey) completedThisMonth += 1;
+      weekKeys.add(mondayOfWeekKey(dayKey));
+    }
+
+    // Walk backward week by week from "this week." An in-progress week with
+    // no session yet doesn't break the streak — it's just not counted until
+    // a workout is logged in it.
+    let cursor = mondayOfWeekKey(madridDateKey(now));
+    if (!weekKeys.has(cursor)) cursor = shiftWeekKey(cursor, -1);
+    let currentStreakWeeks = 0;
+    while (weekKeys.has(cursor)) {
+      currentStreakWeeks += 1;
+      cursor = shiftWeekKey(cursor, -1);
+    }
+
+    res.json({ completedThisMonth, currentStreakWeeks });
   } catch (err) {
     next(err);
   }
@@ -435,15 +511,34 @@ router.patch('/:sessionId/exercises/:sessionExerciseId', async (req, res, next) 
 
 router.post('/:sessionId/exercises/:sessionExerciseId/sets', async (req, res, next) => {
   try {
-    const { catalystApp, sessionExercise } = req;
+    const { catalystApp, sessionExercise, currentUser } = req;
     const siblings = await fetchWhere(catalystApp, 'SessionSet', 'session_exercise_id', sessionExercise.ROWID, 'order_index');
+
+    // A manually added set (e.g. an extra working set) has no target of its
+    // own to copy from, so default its weight/reps to whatever the last set
+    // of this exercise used — the previous set in this session if there is
+    // one, otherwise the last time this exercise was performed at all.
+    let weight = req.body?.weight;
+    let reps = req.body?.reps;
+    if (weight === undefined || reps === undefined) {
+      if (siblings.length > 0) {
+        const lastSibling = siblings[siblings.length - 1];
+        if (weight === undefined) weight = numOrNull(lastSibling.weight);
+        if (reps === undefined) reps = numOrNull(lastSibling.reps);
+      } else {
+        const previous = await getPreviousPerformance(catalystApp, currentUser.userId, sessionExercise.actual_exercise_id, sessionExercise.ROWID);
+        if (weight === undefined) weight = previous?.[0]?.weight ?? null;
+        if (reps === undefined) reps = previous?.[0]?.reps ?? null;
+      }
+    }
+
     const inserted = await catalystApp.datastore().table('SessionSet').insertRow(
       compact({
         session_exercise_id: sessionExercise.ROWID,
         order_index: siblings.length,
         set_type: req.body?.type || 'working',
-        weight: req.body?.weight ?? null,
-        reps: req.body?.reps ?? null,
+        weight: weight ?? null,
+        reps: reps ?? null,
         completed: false,
         skipped: false,
         notes: ''

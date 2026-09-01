@@ -8,6 +8,15 @@ import { CheckIcon } from './icons';
 import type { SessionExercise, SessionSet } from '../types/session';
 import type { Exercise } from '../types/exercise';
 
+// Shown before a set is completed so people know what to aim for; once
+// completed, the progression badge (if any) takes over the same slot.
+function formatTargetReps(min: number | null, max: number | null): string | null {
+  if (min !== null && max !== null) return min === max ? `${min} reps` : `${min}–${max} reps`;
+  if (min !== null) return `${min}+ reps`;
+  if (max !== null) return `up to ${max} reps`;
+  return null;
+}
+
 const SET_TYPE_LABELS: Record<string, string> = {
   warmup: 'Warm-up',
   working: 'Working',
@@ -152,6 +161,7 @@ function SetRow({
   const [reps, setReps] = useState(set.reps);
 
   const hitTarget = set.completed && set.targetRepsMax !== null && (set.reps ?? -Infinity) >= set.targetRepsMax;
+  const targetLabel = formatTargetReps(set.targetRepsMin, set.targetRepsMax);
 
   function toggleComplete() {
     const next = !set.completed;
@@ -164,6 +174,7 @@ function SetRow({
       <div className="set-row-top">
         <span className="set-index-badge">{index + 1}</span>
         <span className={`set-type-chip set-type-chip-${set.type}`}>{SET_TYPE_LABELS[set.type] ?? set.type}</span>
+        {!set.completed && targetLabel && <span className="set-target-label">{targetLabel}</span>}
         {hitTarget && (
           <span className="progression-badge" title="Hit the top of the target rep range">
             🔼 add weight next time
